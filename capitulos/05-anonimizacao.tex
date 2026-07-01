@@ -5,7 +5,7 @@
 \chapter{Diretrizes de Anonimização, Pseudonimização e Sanitização}
 \label{cap:anonimizacao}
 
-Este capítulo desenvolve as diretrizes técnicas para a desidentificação de dados pessoais em logs de infraestrutura, apresentando as técnicas reconhecidas pela ANPD e pelo GDPR e demonstrando sua aplicação prática por meio do framework Microsoft Presidio em logs MikroTik RouterOS.
+Este capítulo desenvolve as diretrizes técnicas para a desidentificação de dados pessoais em logs de infraestrutura, apresentando as técnicas reconhecidas pela ANPD e pelo GDPR e demonstrando sua aplicação prática por meio de uma ferramenta construída com o Microsoft Presidio, framework de código aberto para detecção e anonimização de PII \cite{microsoft2023presidio}, o \textit{MikroTik Log Anonymizer}, aplicada a logs reais de roteadores MikroTik RouterOS. A detecção combina três recognizers: o recognizer nativo do Presidio para endereços IP, um \textit{PatternRecognizer} customizado para endereços MAC -- inexistente no conjunto padrão do framework -- e padrões de expressão regular para nomes de usuário em eventos típicos de autenticação MikroTik.
 
 % ─────────────────────────────────────────────────────────────────────────────
 \section{Conceitos e Distinções}
@@ -48,116 +48,118 @@ A escolha da técnica de anonimização deve considerar a finalidade do log apó
 \end{quadro}
 
 % ─────────────────────────────────────────────────────────────────────────────
-\section{Pseudonimização por Hash Criptográfico}
-\label{sec:hash}
+\section{Arquitetura da Ferramenta Demonstrativa}
+\label{sec:arquitetura}
 
-A pseudonimização por hash aplica uma função de resumo criptográfico ao valor original, produzindo uma representação de tamanho fixo e irreversível sem a chave. A propriedade determinística -- o mesmo dado sempre produz o mesmo resumo -- é especialmente valiosa para análise de incidentes: permite correlacionar todos os eventos de um mesmo endereço IP sem conhecer o endereço real \cite{dwork2014differential}.
+Para ilustrar a aplicação prática das diretrizes acima, foi construído o \textit{MikroTik Log Anonymizer}, disponibilizado via interface web em Streamlit. A ferramenta adota uma arquitetura em três estágios, resumida no \autoref{qdr:arquitetura}: detecção de IPs e MACs pelo Presidio Analyzer (recognizer nativo e customizado, respectivamente), detecção de nomes de usuário por expressão regular e transformação por meio dos operadores do Presidio AnonymizerEngine.
 
-Para logs de infraestrutura, recomenda-se o uso de SHA-256 ou SHA-512 com \textit{salt} -- um valor aleatório concatenado ao dado antes do hash -- para prevenir ataques de dicionário ou de pré-computação (rainbow tables). O \textit{salt} deve ser mantido separadamente dos logs, em cofre de segredos com acesso restrito.
+\begin{quadro}[htb]
+    \caption{\label{qdr:arquitetura}Pipeline de processamento do MikroTik Log Anonymizer}
+    \begin{tabular}{|p{1.5cm}|p{3.5cm}|p{8.8cm}|}
+        \hline
+        \textbf{Estágio} & \textbf{Componente} & \textbf{Responsabilidade} \\
+        \hline
+        1a & Presidio Analyzer & Detecção de endereços IP pelo recognizer nativo \texttt{IP\_ADDRESS} (score 0,92, reforçado por palavras-chave contextuais) e de endereços MAC pelo \textit{PatternRecognizer} customizado (score 0,95) \\
+        \hline
+        1b & Detecção por regex & Localização de nomes de usuário em eventos de autenticação MikroTik, categoria não coberta pelos recognizers padrão do Presidio \\
+        \hline
+        2 & Presidio Anonymizer & Aplicação dos operadores de transformação (hash, mask, redact, replace) sobre as entidades detectadas nos estágios anteriores \\
+        \hline
+        -- & Interface Streamlit & Upload do arquivo, configuração dos operadores e download do log anonimizado \\
+        \hline
+    \end{tabular}
+    \legend{Fonte: Própria dos autores (2025).}
+\end{quadro}
 
-\begin{lstlisting}[language=Python, caption={Pseudonimizacao de IP com SHA-256 e salt}, label={lst:hash-ip}]
-import hashlib, secrets
-
-# Gerar salt (deve ser armazenado separadamente dos logs)
-SALT = secrets.token_hex(32)
-
-def pseudonimizar_ip(ip: str) -> str:
-    """
-    Aplica SHA-256 com salt ao endereco IP.
-    Mesmo IP sempre gera mesmo hash (correlacao preservada).
-    Sem o salt, o hash e irreversivel por dicionario.
-    """
-    dado = (SALT + ip).encode("utf-8")
-    return hashlib.sha256(dado).hexdigest()
-
-# Exemplo de uso
-ip_original = "192.168.1.105"
-ip_pseudo   = pseudonimizar_ip(ip_original)
-# Resultado: string hexadecimal de 64 caracteres
-# Ex: "a3f2c1d8e7b6..." (sempre o mesmo para o mesmo IP + salt)
-\end{lstlisting}
+A combinação é deliberada: os recognizers do Presidio Analyzer oferecem detecção configurável e com pontuação de confiança para os identificadores de rede, enquanto o padrão textual dos eventos de autenticação do MikroTik -- específico da plataforma -- é mais eficientemente capturado por expressão regular dedicada. Os operadores do Presidio AnonymizerEngine, por sua vez, garantem a semântica e a configurabilidade das transformações aplicadas às entidades detectadas.
 
 % ─────────────────────────────────────────────────────────────────────────────
-\section{Mascaramento Parcial}
-\label{sec:mascaramento}
+\section{Motor de Anonimização (\texttt{core\_anonymizer.py})}
+\label{sec:core}
 
-O mascaramento substitui parte do valor por caracteres de máscara, preservando o restante para fins de contexto. É indicado quando alguma informação estrutural do dado precisa ser preservada.
+O módulo \texttt{core\_anonymizer.py} concentra toda a lógica de desidentificação, organizada em estruturas de dados de configuração/resultado e padrões de detecção por expressão regular.
 
-\begin{lstlisting}[language=Python, caption={Mascaramento de MAC -- preserva 3 ultimos octetos}, label={lst:mask-mac}]
-import re
+\begin{lstlisting}[language=Python, caption={Estruturas de dados de configuracao e resultado}, label={lst:dataclasses}]
+@dataclass
+class AnonymizerConfig:
+    ip_mode: AnonymizationMode = "hash"   # hash | mask | redact | replace
+    mac_mode: AnonymizationMode = "mask"
+    redact_usernames: bool = True
+    hash_type: str = "sha256"             # sha256 | sha512 | md5
+    mask_char: str = "*"
 
-_MAC_RE = re.compile(r"\b([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}\b")
-
-def mascarar_mac(mac: str) -> str:
-    """
-    Mascara os 3 primeiros octetos (OUI/fabricante).
-    Preserva os 3 ultimos (identificador do dispositivo).
-    Resultado: **:**:**:XX:XX:XX
-    """
-    partes = mac.split(":")
-    return "**:**:**:" + ":".join(partes[3:])
-
-def mascarar_macs_em_linha(linha: str) -> str:
-    return _MAC_RE.sub(lambda m: mascarar_mac(m.group()), linha)
-
-# Exemplo
-linha = "src-mac 4C:CC:6A:11:22:33, proto TCP"
-print(mascarar_macs_em_linha(linha))
-# Saida: "src-mac **:**:**:11:22:33, proto TCP"
+@dataclass
+class ProcessingResult:
+    original_lines: int = 0
+    processed_lines: int = 0
+    ips_found: int = 0
+    macs_found: int = 0
+    usernames_found: int = 0
+    elapsed_seconds: float = 0.0
+    sample_before: list = field(default_factory=list)
+    sample_after: list  = field(default_factory=list)
+    output_bytes: bytes = b""
 \end{lstlisting}
 
-% ─────────────────────────────────────────────────────────────────────────────
-\section{Generalização Temporal}
-\label{sec:generalizacao-temporal}
+O tipo \texttt{AnonymizationMode} é um \texttt{Literal} Python que restringe os valores aceitos a \texttt{"hash"}, \texttt{"mask"}, \texttt{"redact"} e \texttt{"replace"}, garantindo validação estática por ferramentas como mypy. Como os endereços IP e MAC são detectados pelos recognizers do Presidio Analyzer (\autoref{sec:mac-recognizer}), a única expressão regular própria do módulo cobre os padrões de nome de usuário em eventos de autenticação MikroTik, categoria não coberta pelos recognizers padrão do framework:
 
-A generalização temporal trunca a precisão dos \textit{timestamps}, reduzindo o risco de quasi-identificação por combinação de horário com outros atributos. Para compartilhamento externo, recomenda-se truncar ao nível de hora ou dia.
-
-\begin{lstlisting}[language=Python, caption={Generalizacao temporal de timestamps em logs MikroTik}, label={lst:timestamp}]
-import re
-from datetime import datetime
-
-# Padrao de timestamp MikroTik: "jun/15 08:23:14"
-_TS_RE = re.compile(
-    r"([a-z]{3}/\d{2}\s+)(\d{2}:\d{2}:\d{2})",
-    re.IGNORECASE
-)
-
-def generalizar_timestamp(linha: str,
-                           nivel: str = "hora") -> str:
-    """
-    nivel='hora' -> preserva hh:00:00
-    nivel='dia'  -> remove horario completamente
-    """
-    def substituir(m):
-        if nivel == "hora":
-            hora = m.group(2).split(":")[0]
-            return m.group(1) + hora + ":00:00"
-        return m.group(1).strip()  # remove horario
-
-    return _TS_RE.sub(substituir, linha)
-
-# Exemplos
-linha = "jun/15 08:23:14 firewall,info ..."
-print(generalizar_timestamp(linha, nivel="hora"))
-# Saida: "jun/15 08:00:00 firewall,info ..."
-print(generalizar_timestamp(linha, nivel="dia"))
-# Saida: "jun/15 firewall,info ..."
+\begin{lstlisting}[language=Python, caption={Padroes de deteccao de username por expressao regular}, label={lst:regex}]
+# Padroes de username em eventos MikroTik
+_USERNAME_PATTERNS = [
+    (re.compile(r"\buser\s+(\w+)\s+logged\b", re.IGNORECASE),
+     "user <USUARIO> logged"),
+    (re.compile(r"\bchanged\s+by\s+(\w+)\b", re.IGNORECASE),
+     "changed by <USUARIO>"),
+    (re.compile(r"\bfailed\s+login\s+attempt\s+for\s+(\w+)\b",
+     re.IGNORECASE), "failed login attempt for <USUARIO>"),
+]
 \end{lstlisting}
 
+A classe \texttt{MikroTikAnonymizer} implementa o método \texttt{process\_file}, que itera sobre todas as linhas do log, aplicando sequencialmente os três estágios de anonimização:
+
+\begin{lstlisting}[language=Python, caption={Pipeline de processamento linha a linha}, label={lst:pipeline}]
+for i, line in enumerate(lines):
+    # 1. Usernames -- Art. 6 III (Minimizacao)
+    if config.redact_usernames:
+        for pat, repl in _USERNAME_PATTERNS:
+            new_line, n = pat.subn(repl, line)
+            if n:
+                line = new_line
+                result.usernames_found += n
+
+    # 2. IPs e MACs -- Art. 6 VII, VIII e IX
+    #    (Seguranca / Prevencao / Nao discriminacao)
+    analyzer_results = analyzer.analyze(
+        text=line, entities=["IP_ADDRESS", "MAC_ADDRESS"], language="en"
+    )
+    if analyzer_results:
+        result.ips_found += sum(
+            1 for r in analyzer_results if r.entity_type == "IP_ADDRESS")
+        result.macs_found += sum(
+            1 for r in analyzer_results if r.entity_type == "MAC_ADDRESS")
+        line = anonymizer.anonymize(
+            text=line, analyzer_results=analyzer_results,
+            operators=operators
+        ).text
+
+    out_lines.append(line)
+\end{lstlisting}
+
+A ordem dos estágios é deliberada: usernames são processados primeiro por expressão regular, antes de o restante da linha ser submetido ao Presidio Analyzer, evitando que fragmentos de nomes de usuário sejam erroneamente capturados pelos recognizers de IP ou MAC.
+
 % ─────────────────────────────────────────────────────────────────────────────
-\section{Pipeline de Anonimização com Microsoft Presidio}
-\label{sec:presidio-pipeline}
+\section{Recognizers do Presidio: IP Nativo e MAC Customizado}
+\label{sec:mac-recognizer}
 
-O Microsoft Presidio é um framework de código aberto para detecção e anonimização de PII em textos não estruturados \cite{microsoft2023presidio}. Sua arquitetura em dois componentes -- Presidio Analyzer (detecção) e Presidio Anonymizer (transformação) -- permite a construção de pipelines configuráveis que aplicam técnicas distintas a cada tipo de entidade.
+Para endereços IP, utiliza-se o recognizer nativo \texttt{IP\_ADDRESS} do Presidio Analyzer, com a lista de palavras-chave contextuais (\texttt{context}) ampliada para termos comuns em logs de rede -- como \texttt{"src"}, \texttt{"dst"}, \texttt{"ip"} e \texttt{"endereço"} --, elevando a pontuação de confiança das detecções para 0,92 nos testes realizados com o log real.
 
-Para logs MikroTik, implementou-se um pipeline híbrido que combina detecção por expressões regulares (para escala) com os operadores do Presidio AnonymizerEngine (para semântica e configurabilidade). Um resultado técnico relevante do projeto foi a constatação de que o Presidio não inclui nativamente um recognizer para endereços MAC, tornando necessária a implementação de um \texttt{PatternRecognizer} customizado:
+Já para endereços MAC, constatou-se que o Microsoft Presidio, em sua versão padrão (\texttt{presidio-analyzer >= 2.2.355}), não inclui um recognizer nativo -- resultado técnico relevante do projeto. Esse tipo de dado é tratado como PII de alta sensibilidade pela LGPD (art.\ 6°, IX), pois permite o perfilamento de dispositivos específicos ao longo do tempo. A implementação do recognizer customizado segue a interface \texttt{PatternRecognizer} do Presidio e é registrada no \texttt{AnalyzerEngine} antes do uso, ao lado do recognizer nativo de IP:
 
-\begin{lstlisting}[language=Python, caption={Recognizer customizado de MAC Address para o Microsoft Presidio}, label={lst:mac-presidio}]
+\begin{lstlisting}[language=Python, caption={Recognizer customizado para enderecos MAC}, label={lst:mac-recognizer}]
 from presidio_analyzer import PatternRecognizer, Pattern
 
-# MAC_ADDRESS nao existe no conjunto padrao do Presidio
 mac_pattern = Pattern(
-    name="MAC_ADDRESS_PATTERN",
+    name="MAC_ADDRESS",
     regex=r"\b([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}\b",
     score=0.95
 )
@@ -171,7 +173,111 @@ mac_recognizer = PatternRecognizer(
 # analyzer.registry.add_recognizer(mac_recognizer)
 \end{lstlisting}
 
-O pipeline completo, com processamento de 738.846 linhas de log real (50~MB), anonimizou 258.688~IPs, 148.120~MACs e 73.867~usernames em aproximadamente 9 segundos em hardware convencional, demonstrando viabilidade operacional para uso cotidiano.
+O \textit{score} de 0,95 foi definido empiricamente após testes com o log real: a expressão regular é suficientemente estrita para o formato MAC que falsos positivos não foram observados, justificando um score próximo ao máximo. As palavras de contexto ampliam a precisão em casos onde o formato apareça em texto narrativo.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Operadores de Anonimização}
+\label{sec:operadores}
+
+Os operadores disponibilizados ao usuário na interface são configurados como objetos \texttt{OperatorConfig} do Presidio AnonymizerEngine, mapeados por tipo de entidade detectada. Para IPs, quatro modos são oferecidos:
+
+\begin{lstlisting}[language=Python, caption={Fabrica de operadores Presidio para enderecos IP}, label={lst:op-ip}]
+from presidio_anonymizer.entities import OperatorConfig
+
+def _make_ip_operator(mode: str, hash_type: str) -> OperatorConfig:
+    if mode == "hash":
+        # Pseudonimizacao deterministica: mesmo IP -> mesmo hash
+        return OperatorConfig("hash", {"hash_type": hash_type})
+    if mode == "mask":
+        return OperatorConfig("mask", {
+            "masking_char": "*", "chars_to_mask": 9, "from_end": False
+        })
+    if mode == "redact":
+        return OperatorConfig("redact", {})
+    return OperatorConfig("replace", {"new_value": "<IP_ANONIMIZADO>"})
+\end{lstlisting}
+
+A propriedade determinística do operador \texttt{hash} é essencial para a análise de incidentes: o analista pode agrupar todos os eventos originados de um mesmo IP sem conhecer o endereço real. Para MACs, a mesma lógica de quatro modos é aplicada, preservando por padrão os três octetos finais do dispositivo:
+
+\begin{lstlisting}[language=Python, caption={Fabrica de operadores Presidio para enderecos MAC}, label={lst:op-mac}]
+def _make_mac_operator(mode: str) -> OperatorConfig:
+    if mode == "hash":
+        return OperatorConfig("hash", {"hash_type": "sha256"})
+    if mode == "mask":
+        # Mascara os 3 primeiros octetos (OUI/fabricante)
+        # Preserva os 3 ultimos (identificador do dispositivo)
+        return OperatorConfig("mask", {
+            "masking_char": "*", "chars_to_mask": 9, "from_end": False
+        })
+    if mode == "redact":
+        return OperatorConfig("redact", {})
+    return OperatorConfig("replace", {"new_value": "<MAC_ANONIMIZADO>"})
+
+operators = {
+    "IP_ADDRESS": _make_ip_operator(config.ip_mode, config.hash_type),
+    "MAC_ADDRESS": _make_mac_operator(config.mac_mode),
+}
+\end{lstlisting}
+
+Os três primeiros octetos do MAC formam o OUI (\textit{Organizationally Unique Identifier}), que identifica o fabricante e por si só não identifica o titular; os três finais identificam o dispositivo específico e constituem o dado pessoal sensível. O resultado \texttt{***:***:***:XX:XX:XX} remove a possibilidade de perfilamento sem eliminar a utilidade do dado para análise de topologia de rede.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Pseudonimização por Hash com \textit{Salt}}
+\label{sec:hash}
+
+Para cenários que exigem garantia adicional contra ataques de dicionário ou pré-computação (\textit{rainbow tables}), recomenda-se complementar o hash com um \textit{salt} -- valor aleatório concatenado ao dado antes do resumo criptográfico -- mantido separadamente dos logs, em cofre de segredos com acesso restrito \cite{dwork2014differential}.
+
+\begin{lstlisting}[language=Python, caption={Pseudonimizacao de IP com SHA-256 e salt}, label={lst:hash-ip}]
+import hashlib, secrets
+
+SALT = secrets.token_hex(32)  # armazenado separadamente dos logs
+
+def pseudonimizar_ip(ip: str) -> str:
+    """Mesmo IP + salt sempre gera o mesmo hash (correlacao
+    preservada); sem o salt, o hash e irreversivel por dicionario."""
+    return hashlib.sha256((SALT + ip).encode("utf-8")).hexdigest()
+\end{lstlisting}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Generalização Temporal}
+\label{sec:generalizacao-temporal}
+
+A generalização temporal trunca a precisão dos \textit{timestamps}, reduzindo o risco de quasi-identificação por combinação de horário com outros atributos. Para compartilhamento externo, recomenda-se truncar ao nível de hora ou dia.
+
+\begin{lstlisting}[language=Python, caption={Generalizacao temporal de timestamps em logs MikroTik}, label={lst:timestamp}]
+_TS_RE = re.compile(r"([a-z]{3}/\d{2}\s+)(\d{2}:\d{2}:\d{2})", re.IGNORECASE)
+
+def generalizar_timestamp(linha: str, nivel: str = "hora") -> str:
+    """nivel='hora' -> preserva hh:00:00; nivel='dia' -> remove horario."""
+    def substituir(m):
+        if nivel == "hora":
+            return m.group(1) + m.group(2).split(":")[0] + ":00:00"
+        return m.group(1).strip()
+    return _TS_RE.sub(substituir, linha)
+\end{lstlisting}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Interface Web (\texttt{app.py})}
+\label{sec:interface}
+
+A interface web foi desenvolvida em Streamlit e estruturada em quatro áreas funcionais:
+
+\begin{alineas}
+    \item \textbf{Painel lateral de configuração}: o usuário seleciona, de forma independente, o método de anonimização para IPs (com seleção do algoritmo de hash quando aplicável), para MACs e o comportamento para usernames. O painel exibe também os artigos LGPD cobertos por cada configuração, servindo como guia de conformidade embutido na interface;
+    \item \textbf{Área de upload}: aceita arquivos \texttt{.log}, \texttt{.txt} e \texttt{.zip}. Arquivos comprimidos são descompactados em memória (RAM), sem gravação em disco, antes do processamento;
+    \item \textbf{Painel de resultados}: exibe métricas da execução (linhas processadas, contagens por tipo de PII, tempo decorrido e tamanho do log anonimizado) e um preview lado a lado de até 10 linhas com PII detectada, antes e depois da anonimização, permitindo auditoria visual imediata;
+    \item \textbf{Download}: o log anonimizado é disponibilizado para download direto no navegador, com nomenclatura automática (\texttt{<nome-original>\_lgpd\_anonimizado.log}).
+\end{alineas}
+
+O processamento assíncrono com barra de progresso (atualizada a cada 0,5\% do arquivo) mantém a interface responsiva durante o processamento de arquivos grandes. O motor é carregado com cache (\texttt{@st.cache\_resource}), evitando reinicializações desnecessárias entre execuções consecutivas.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Resultados da Validação}
+\label{sec:presidio-pipeline}
+
+O pipeline completo foi validado com um log real de roteador MikroTik em produção, contendo 738.846 linhas e cerca de 50~MB de dados brutos. O processamento anonimizou 258.688 IPs, 148.120 MACs e 73.867 usernames em aproximadamente 9 segundos em hardware convencional, demonstrando viabilidade operacional para uso cotidiano. A decisão de preservar os \textit{timestamps} originais mereceu análise específica: embora possam contribuir para reidentificação em combinação com outros atributos (\autoref{sec:reidentificacao}), sua supressão eliminaria a utilidade primária dos logs para análise de incidentes -- optou-se por mantê-los para uso interno, com generalização temporal recomendada para cenários de compartilhamento externo.
+
+Como limitação, a ferramenta não trata o risco de reidentificação por combinação de quasi-identificadores (horário + tipo de evento + segmento de rede). Para cenários de alta sensibilidade, recomenda-se complementar com técnicas de privacidade diferencial, implementáveis via \textit{SmartNoise} ou \textit{Google Differential Privacy Library} \cite{dwork2014differential}.
 
 % ─────────────────────────────────────────────────────────────────────────────
 \section{Diretrizes para Aplicação}
@@ -183,6 +289,6 @@ Com base nas técnicas descritas, propõem-se as seguintes diretrizes para a org
     \item Aplicar anonimização automaticamente no momento da coleta, sempre que a finalidade primária do log não exigir a identidade do titular -- eliminando o risco na origem;
     \item Para logs que precisam preservar a capacidade de correlação (uso interno de segurança), adotar pseudonimização por hash com \textit{salt}; para compartilhamento externo, aplicar supressão ou generalização;
     \item Manter separação física ou lógica entre o \textit{salt} e os logs pseudonimizados -- o acesso ao \textit{salt} deve ser restrito ao administrador de segurança;
-    \item Documentar o processo de anonimização aplicado a cada categoria de log, incluindo o algoritmo utilizado, os campos tratados e a data de aplicação, para fins de demonstração de conformidade (art.\ 6°, X, LGPD -- responsabilização);
+    \item Documentar o processo de anonimização aplicado a cada categoria de log, incluindo o algoritmo utilizado, os campos tratados e a data de aplicação, para fins de demonstração de conformidade (art.\ 6°, X, LGPD -- responsabilização), integrando o registro de atividades de tratamento do \autoref{sec:documentacao};
     \item Revisar anualmente a efetividade das técnicas adotadas, considerando a evolução das capacidades técnicas de reidentificação.
 \end{alineas}

@@ -1,0 +1,119 @@
+% ==============================================================================
+% CAPÍTULO 2 — NATUREZA DOS DADOS EM LOGS DE INFRAESTRUTURA DE TI
+% ==============================================================================
+
+\chapter{Natureza dos Dados em Logs de Infraestrutura de TI}
+\label{cap:natureza}
+
+Este capítulo analisa os tipos de dados produzidos por equipamentos de infraestrutura de TI, identificando quais categorias constituem dados pessoais nos termos da LGPD e em que circunstâncias podem ser considerados dados pessoais sensíveis.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{O Que São Logs de Infraestrutura}
+\label{sec:o-que-sao-logs}
+
+Logs de infraestrutura são registros automáticos gerados por dispositivos e sistemas de TI para documentar eventos operacionais. Cada entrada de log tipicamente contém um \textit{timestamp} (data e hora do evento), uma categoria ou severidade, e uma mensagem descritiva do evento ocorrido. Dependendo do equipamento e da configuração, os logs podem registrar conexões de rede, autenticações, erros de sistema, transferências de dados, alterações de configuração e alertas de segurança \cite{kent2006guide}.
+
+A \autoref{lst:exemplos-logs} ilustra entradas típicas de log de diferentes dispositivos de infraestrutura.
+
+\begin{lstlisting}[language={}, caption={Exemplos de entradas de log de dispositivos de infraestrutura de TI}, label={lst:exemplos-logs}]
+# MikroTik RouterOS - evento de firewall com IP e MAC
+jun/15 08:23:14 firewall,info forward: in:ether1
+  src-mac 4C:CC:6A:11:22:33, proto TCP,
+  192.168.1.105:54231->203.0.113.45:443
+
+# MikroTik RouterOS - autenticacao administrativa
+jun/15 08:23:15 system,info,account user admin
+  logged in from 192.168.1.100 via winbox
+
+# Servidor Linux (auth.log) - tentativa de SSH
+Jun 15 08:24:02 servidor sshd[1234]: Failed password
+  for root from 198.51.100.12 port 42891 ssh2
+
+# Firewall pfSense - bloqueio de pacote
+Jun 15 08:25:11 filterlog: 5,16,0,match,block,in,
+  4,0x0,64,tcp,192.168.0.50,203.0.113.99,80
+\end{lstlisting}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Classificação dos Dados Presentes em Logs}
+\label{sec:classificacao}
+
+A análise dos logs de infraestrutura revela quatro categorias distintas de informação, com diferentes graus de sensibilidade sob a ótica da LGPD.
+
+\subsection{Dados de Identificação de Rede}
+\label{subsec:dados-rede}
+
+Endereços IP (versões 4 e 6) e endereços MAC são os identificadores de rede mais frequentes em logs de infraestrutura. Embora tecnicamente sejam endereços de equipamentos, sua correlação com registros de provedores de acesso à internet permite identificar a pessoa natural titular da conexão, caracterizando-os como dados pessoais nos termos do art.\ 5°, I, da LGPD \cite{brasil2018lgpd}. O Tribunal de Justiça da União Europeia consolidou esse entendimento no caso \textit{Breyer v. Bundesrepublik Deutschland} (C-582/14), reconhecendo que endereços IP dinâmicos constituem dados pessoais quando o responsável pelo tratamento dispõe de meios razoáveis para obter a identificação do titular.
+
+O \autoref{qdr:dados-rede} sintetiza os principais identificadores de rede e seu enquadramento legal.
+
+\begin{quadro}[htb]
+    \caption{\label{qdr:dados-rede}Dados de identificação de rede em logs e enquadramento na LGPD}
+    \begin{tabular}{|p{3cm}|p{4cm}|p{6.8cm}|}
+        \hline
+        \textbf{Dado} & \textbf{Presente em} & \textbf{Enquadramento LGPD} \\
+        \hline
+        Endereço IPv4 & Firewalls, roteadores, servidores & Dado pessoal (art.\ 5°, I) — identifica titular junto ao ISP \\
+        \hline
+        Endereço IPv6 & Roteadores modernos, servidores & Dado pessoal (art.\ 5°, I) — pode ser globalmente único \\
+        \hline
+        Endereço MAC & Roteadores, switches, APs & Dado pessoal (art.\ 5°, I) — identifica hardware do titular \\
+        \hline
+        Porta TCP/UDP & Firewalls, proxies & Isolado: não é dado pessoal. Combinado: pode revelar comportamento \\
+        \hline
+        Nome de host & Servidores DNS, DHCP & Dado pessoal quando associado a pessoa identificável \\
+        \hline
+    \end{tabular}
+    \legend{Fonte: Própria dos autores (2025), com base em \citeonline{brasil2018lgpd}.}
+\end{quadro}
+
+\subsection{Dados de Autenticação e Acesso}
+\label{subsec:dados-autenticacao}
+
+Logs de autenticação registram tentativas de acesso a sistemas e serviços, contendo nomes de usuário, horários de acesso, endereços de origem e resultado da autenticação (sucesso ou falha). Esses dados são particularmente sensíveis porque documentam o comportamento do titular: quando acessa sistemas, de onde, com qual frequência e se teve tentativas negadas. A combinação de nome de usuário, endereço IP e padrão temporal configura um perfil comportamental, cuja criação é expressamente vedada pelo princípio de não discriminação (art.\ 6°, IX, LGPD).
+
+\subsection{Dados de Comportamento e Tráfego}
+\label{subsec:dados-comportamento}
+
+Logs de firewall e proxy registram os destinos das conexões realizadas pelos usuários: quais sites foram acessados, quais serviços foram utilizados, em que horários e por quanto tempo. Individualmente, uma entrada de log de destino pode parecer irrelevante; em conjunto, o histórico de navegação de um usuário constitui um perfil detalhado de seus interesses, hábitos, crenças e, eventualmente, estado de saúde ou orientação política -- dados que se aproximam das categorias especiais do art.\ 11 da LGPD, exigindo proteção reforçada.
+
+\subsection{Dados de Configuração e Administração}
+\label{subsec:dados-admin}
+
+Logs de alteração de configuração registram quem modificou o quê e quando em dispositivos de rede. Contêm nomes de usuários administradores, endereços de origem das sessões administrativas e descrição das mudanças realizadas. Esses dados são relevantes tanto para a segurança da informação (auditoria de mudanças) quanto para a proteção de dados (identificação do responsável por determinada ação).
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{O Risco de Reidentificação por Combinação}
+\label{sec:reidentificacao}
+
+Um aspecto central da análise de privacidade em logs é o risco de reidentificação por combinação de atributos. Mesmo que nenhum campo isolado permita identificar diretamente o titular, a combinação de múltiplos atributos -- denominados \textit{quasi-identificadores} -- pode tornar o indivíduo identificável \cite{sweeney2002kanonymity}. Em um log de rede, a combinação de faixa de horário, segmento de rede, tipo de protocolo e endereço de destino pode ser suficiente para individualizar o comportamento de um usuário específico, mesmo sem que seu nome ou endereço IP apareçam explicitamente.
+
+Essa característica implica que a avaliação de privacidade de logs não pode ser feita campo a campo: é necessária uma análise holística do conjunto de dados, considerando todas as possibilidades de combinação e o contexto em que o log será armazenado, processado ou compartilhado.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Ciclo de Vida do Dado no Log}
+\label{sec:ciclo-vida}
+
+Todo dado presente em um log percorre um ciclo de vida que começa na sua geração pelo equipamento e termina no descarte definitivo do arquivo. O \autoref{qdr:ciclo-vida} descreve as etapas desse ciclo e os riscos associados a cada uma.
+
+\begin{quadro}[htb]
+    \caption{\label{qdr:ciclo-vida}Ciclo de vida do dado em logs de infraestrutura}
+    \begin{tabular}{|p{2.5cm}|p{4.5cm}|p{6.8cm}|}
+        \hline
+        \textbf{Etapa} & \textbf{Descrição} & \textbf{Riscos de privacidade} \\
+        \hline
+        Geração & Equipamento registra o evento automaticamente & Coleta excessiva de dados desnecessários \\
+        \hline
+        Coleta & Log é enviado a servidor centralizado (syslog, SIEM) & Transmissão sem criptografia; acesso não autorizado em trânsito \\
+        \hline
+        Armazenamento & Log é gravado em disco por período definido & Acesso não controlado; ausência de criptografia em repouso \\
+        \hline
+        Processamento & Log é analisado para fins de segurança ou auditoria & Acesso por pessoal não autorizado; uso para finalidade diferente da declarada \\
+        \hline
+        Compartilhamento & Log é enviado a terceiros (fornecedores, autoridades) & Transferência sem base legal; ausência de anonimização prévia \\
+        \hline
+        Descarte & Log é excluído ao fim do período de retenção & Exclusão incompleta; persistência em backups não controlados \\
+        \hline
+    \end{tabular}
+    \legend{Fonte: Própria dos autores (2025).}
+\end{quadro}

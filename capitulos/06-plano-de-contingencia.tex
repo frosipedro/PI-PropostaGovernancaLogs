@@ -1,0 +1,124 @@
+% ==============================================================================
+% CAPÍTULO 6 — PLANO DE CONTINGÊNCIA E RESPOSTA A INCIDENTES
+% ==============================================================================
+
+\chapter{Plano de Contingência e Resposta a Incidentes}
+\label{cap:contingencia}
+
+Este capítulo propõe um plano de contingência e resposta a incidentes de segurança envolvendo logs de infraestrutura de TI, alinhado às boas práticas internacionais, à LGPD e à Resolução CD/ANPD n°~19/2024.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Fundamentação e Objetivos do Plano}
+\label{sec:fund-plano}
+
+Um incidente de segurança envolvendo logs de infraestrutura pode assumir diversas formas: acesso não autorizado aos arquivos de log, exfiltração de dados por agente malicioso, destruição acidental ou intencional de registros, ou divulgação indevida a terceiros. Em todos esses casos, a LGPD impõe obrigações específicas: o art.\ 48 determina que o controlador comunique à ANPD e aos titulares afetados a ocorrência de incidente de segurança que possa acarretar risco ou dano relevante, em prazo razoável \cite{brasil2018lgpd}.
+
+A Resolução CD/ANPD n°~2/2022 operacionalizou esse prazo em dois dias úteis a partir do conhecimento do incidente para a comunicação inicial à ANPD, com prazo adicional para comunicação complementar. O plano proposto neste capítulo estrutura os procedimentos necessários para cumprir essas obrigações e minimizar os danos decorrentes de incidentes.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Classificação de Incidentes}
+\label{sec:classificacao-incidentes}
+
+Os incidentes relacionados a logs de infraestrutura são classificados em três níveis de severidade, conforme o potencial de dano aos titulares e à organização.
+
+\begin{quadro}[htb]
+    \caption{\label{qdr:incidentes}Classificação de incidentes envolvendo logs de infraestrutura}
+    \begin{tabular}{|p{1.5cm}|p{3cm}|p{4cm}|p{5.3cm}|}
+        \hline
+        \textbf{Nível} & \textbf{Classificação} & \textbf{Exemplos} & \textbf{Ação imediata} \\
+        \hline
+        1 & Crítico & Exfiltração confirmada de logs com dados pessoais; ransomware em servidor de logs & Isolar sistema, acionar equipe de resposta, notificar ANPD em até 2 dias úteis \\
+        \hline
+        2 & Grave & Acesso não autorizado a logs (sem confirmação de exfiltração); falha de criptografia em repouso & Investigar escopo, preservar evidências, avaliar necessidade de notificação \\
+        \hline
+        3 & Moderado & Acesso por usuário não autorizado internamente; compartilhamento indevido de log bruto & Revogar acesso, documentar ocorrência, corrigir controle falho \\
+        \hline
+    \end{tabular}
+    \legend{Fonte: Própria dos autores (2025).}
+\end{quadro}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Fases do Plano de Resposta}
+\label{sec:fases}
+
+O plano de resposta a incidentes é estruturado em seis fases, baseadas no modelo do NIST SP 800-61 \cite{nist2012incident} e adaptadas ao contexto de logs de infraestrutura e às obrigações da LGPD.
+
+\subsection{Fase 1 — Preparação}
+\label{subsec:preparacao}
+
+A preparação é a fase preventiva, realizada antes de qualquer incidente. Inclui:
+
+\begin{alineas}
+    \item Definição e treinamento de uma Equipe de Resposta a Incidentes (ERI), com papéis claramente atribuídos: Coordenador, Analista Técnico, Responsável pelo DPO/jurídico e Comunicador;
+    \item Implantação de ferramentas de monitoramento de integridade dos arquivos de log (FIM -- \textit{File Integrity Monitoring}), que detectam modificações não autorizadas em tempo real;
+    \item Definição prévia dos critérios de notificação à ANPD e aos titulares, incluindo modelos de comunicação aprovados pela assessoria jurídica;
+    \item Realização de exercícios de simulação (\textit{tabletop exercises}) ao menos uma vez por ano.
+\end{alineas}
+
+\subsection{Fase 2 — Identificação}
+\label{subsec:identificacao}
+
+A fase de identificação começa quando um evento anômalo é detectado. As ações incluem:
+
+\begin{alineas}
+    \item Confirmar se o evento constitui efetivamente um incidente de segurança ou um falso positivo;
+    \item Determinar o escopo inicial: quais logs foram afetados, qual o volume de dados potencialmente comprometidos e quais categorias de dados pessoais estão envolvidas;
+    \item Registrar o horário de identificação do incidente -- o prazo de dois dias úteis para notificação à ANPD começa a contar a partir desse momento.
+\end{alineas}
+
+\subsection{Fase 3 — Contenção}
+\label{subsec:contencao}
+
+A contenção visa limitar o dano sem destruir evidências:
+
+\begin{alineas}
+    \item Contenção de curto prazo: isolar o sistema afetado da rede, revogar acessos suspeitos, bloquear canais de exfiltração identificados;
+    \item Contenção de longo prazo: implantar controles compensatórios (como autenticação adicional ou restrição de acesso temporária) enquanto a causa raiz é investigada;
+    \item Preservar todos os registros de evidência (logs do sistema operacional, logs de acesso, registros de firewall) em mídia somente-leitura, para uso em investigação forense e eventual processo legal.
+\end{alineas}
+
+\subsection{Fase 4 — Investigação e Erradicação}
+\label{subsec:investigacao}
+
+\begin{alineas}
+    \item Conduzir análise forense para determinar a causa raiz do incidente, o vetor de ataque e o escopo definitivo dos dados comprometidos;
+    \item Identificar e remover o agente causador (malware, conta comprometida, misconfiguration);
+    \item Avaliar se o incidente se enquadra na obrigação de notificação à ANPD, considerando os critérios de risco e dano relevante estabelecidos pela Resolução CD/ANPD n°~2/2022.
+\end{alineas}
+
+\subsection{Fase 5 — Notificação}
+\label{subsec:notificacao}
+
+Para incidentes de nível 1 (Crítico), a notificação à ANPD deve ocorrer em até dois dias úteis a partir da identificação do incidente. A comunicação inicial deve conter:
+
+\begin{alineas}
+    \item Descrição da natureza do incidente e das categorias e volume de dados pessoais afetados;
+    \item Identificação dos titulares afetados (ou estimativa, quando não for possível determinar com precisão);
+    \item Medidas técnicas e organizacionais adotadas para mitigar os efeitos do incidente;
+    \item Nome e dados de contato do Encarregado (DPO).
+\end{alineas}
+
+A comunicação aos titulares deve ocorrer quando o incidente puder acarretar risco ou dano relevante a eles, sendo realizada de forma clara e acessível, sem uso de linguagem técnica que dificulte a compreensão.
+
+\subsection{Fase 6 — Recuperação e Lições Aprendidas}
+\label{subsec:recuperacao}
+
+\begin{alineas}
+    \item Restaurar os sistemas afetados a partir de backups verificados e íntegros;
+    \item Implementar as correções identificadas durante a investigação para prevenir recorrência;
+    \item Elaborar relatório pós-incidente documentando: cronologia, causa raiz, impacto, ações tomadas, lições aprendidas e melhorias implementadas;
+    \item Revisar e atualizar o plano de resposta com base nos aprendizados do incidente.
+\end{alineas}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Backups e Continuidade}
+\label{sec:backups}
+
+Os logs devem ser incluídos na política de backup da organização, com as seguintes especificações:
+
+\begin{alineas}
+    \item Backups devem ser realizados com frequência compatível com o volume de dados gerado e o prazo de retenção definido;
+    \item Os backups de logs devem ser criptografados com a mesma ou superior nível de proteção dos logs primários;
+    \item Backups devem ser armazenados em localização física ou lógica separada dos logs primários, para garantir disponibilidade em caso de ransomware ou desastre físico;
+    \item A integridade dos backups deve ser verificada periodicamente por meio de restaurações de teste documentadas.
+\end{alineas}

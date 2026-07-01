@@ -1,0 +1,223 @@
+% ==============================================================================
+% CAPÍTULO 4 — DESENVOLVIMENTO
+% ==============================================================================
+
+\chapter{Desenvolvimento}
+\label{cap:desenvolvimento}
+
+Este capítulo detalha a implementação do \textit{MikroTik Log Anonymizer}. A \autoref{sec:arquitetura} descreve a arquitetura geral da solução. As seções seguintes detalham cada componente: o motor de anonimização (\autoref{sec:core}), o recognizer customizado de MAC (\autoref{sec:mac-recognizer}), os operadores de anonimização (\autoref{sec:operadores}), e a interface web (\autoref{sec:interface}).
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Arquitetura Geral}
+\label{sec:arquitetura}
+
+A solução adota uma arquitetura híbrida de dois estágios, representada esquematicamente no \autoref{qdr:arquitetura}.
+
+\begin{quadro}[htb]
+    \caption{\label{qdr:arquitetura}Pipeline de processamento do MikroTik Log Anonymizer}
+    \begin{tabular}{|p{1.5cm}|p{3.5cm}|p{8.8cm}|}
+        \hline
+        \textbf{Estágio} & \textbf{Componente} & \textbf{Responsabilidade} \\
+        \hline
+        1 & Detecção por regex & Localização de IPs, MACs e usernames via expressões regulares de alta performance -- cobre o volume de 700k+ linhas em tempo sub-linear \\
+        \hline
+        2 & Presidio Anonymizer & Aplicação dos operadores de transformação (hash, mask, redact, replace) sobre as ocorrências detectadas no estágio anterior \\
+        \hline
+        -- & Interface Streamlit & Upload do arquivo, configuração dos operadores e download do log anonimizado \\
+        \hline
+    \end{tabular}
+    \legend{Fonte: Própria dos autores (2025).}
+\end{quadro}
+
+A separação entre detecção e anonimização é deliberada. O Presidio Analyzer, em modo completo com NLP, possui latência incompatível com o volume de dados de logs de rede. A camada de regex resolve o problema de escala; os operadores do Presidio AnonymizerEngine garantem a semântica e a configurabilidade das transformações.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Motor de Anonimização (\texttt{core\_anonymizer.py})}
+\label{sec:core}
+
+O módulo \texttt{core\_anonymizer.py} concentra toda a lógica de desidentificação. Ele é organizado em três camadas: estruturas de dados de configuração e resultado, padrões de detecção e fábricas de operadores.
+
+\subsection{Estruturas de Dados}
+\label{subsec:dataclasses}
+
+Duas \textit{dataclasses} Python encapsulam, respectivamente, a configuração de uma execução e o resultado produzido:
+
+\begin{lstlisting}[language=Python, caption={Estruturas de dados de configuracao e resultado}, label={lst:dataclasses}]
+@dataclass
+class AnonymizerConfig:
+    ip_mode: AnonymizationMode = "hash"   # hash | mask | redact | replace
+    mac_mode: AnonymizationMode = "mask"
+    redact_usernames: bool = True
+    hash_type: str = "sha256"             # sha256 | sha512 | md5
+    mask_char: str = "*"
+
+@dataclass
+class ProcessingResult:
+    original_lines: int = 0
+    processed_lines: int = 0
+    ips_found: int = 0
+    macs_found: int = 0
+    usernames_found: int = 0
+    elapsed_seconds: float = 0.0
+    sample_before: list = field(default_factory=list)
+    sample_after: list  = field(default_factory=list)
+    output_bytes: bytes = b""
+\end{lstlisting}
+
+O tipo \texttt{AnonymizationMode} é um \texttt{Literal} Python que restringe os valores aceitos a \texttt{"hash"}, \texttt{"mask"}, \texttt{"redact"} e \texttt{"replace"}, garantindo validação estática por ferramentas como mypy.
+
+\subsection{Padrões de Detecção por Expressão Regular}
+\label{subsec:regex}
+
+Três expressões regulares cobrem os tipos de PII identificados:
+
+\begin{lstlisting}[language=Python, caption={Padroes de deteccao de PII por expressao regular}, label={lst:regex}]
+# IPv4 estrito: valida cada octeto no intervalo 0-255
+_IP_RE = re.compile(
+    r"\b(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}"
+    r"(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\b"
+)
+
+# MAC no formato XX:XX:XX:XX:XX:XX (case-insensitive)
+_MAC_RE = re.compile(r"\b([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}\b")
+
+# Padroes de username em eventos MikroTik
+_USERNAME_PATTERNS = [
+    (re.compile(r"\buser\s+(\w+)\s+logged\b", re.IGNORECASE),
+     "user <USUARIO> logged"),
+    (re.compile(r"\bchanged\s+by\s+(\w+)\b", re.IGNORECASE),
+     "changed by <USUARIO>"),
+    (re.compile(r"\bfailed\s+login\s+attempt\s+for\s+(\w+)\b",
+     re.IGNORECASE), "failed login attempt for <USUARIO>"),
+]
+\end{lstlisting}
+
+A expressão regular para IPv4 é propositalmente estrita: valida cada octeto individualmente no intervalo 0--255, evitando falsos positivos com sequências numéricas arbitrárias (como números de versão ou timestamps no formato \texttt{YYYY.MM.DD}). Essa precisão é particularmente importante em logs onde tais padrões são frequentes.
+
+\subsection{Pipeline de Processamento por Linha}
+\label{subsec:pipeline}
+
+A classe \texttt{MikroTikAnonymizer} implementa o método \texttt{process\_file}, que itera sobre todas as linhas do log, aplicando sequencialmente os três estágios de anonimização:
+
+\begin{lstlisting}[language=Python, caption={Pipeline de processamento linha a linha}, label={lst:pipeline}]
+for i, line in enumerate(lines):
+    original = line
+
+    # 1. Usernames -- Art. 6 III (Minimizacao)
+    if config.redact_usernames:
+        for pat, repl in _USERNAME_PATTERNS:
+            new_line, n = pat.subn(repl, line)
+            if n:
+                line = new_line
+                result.usernames_found += n
+
+    # 2. IPs -- Art. 6 VII e VIII (Seguranca / Prevencao)
+    ip_hits = _IP_RE.findall(line)
+    if ip_hits:
+        result.ips_found += len(ip_hits)
+        line = _IP_RE.sub(ip_op, line)
+
+    # 3. MACs -- Art. 6 IX (Nao discriminacao)
+    mac_hits = _MAC_RE.findall(line)
+    if mac_hits:
+        result.macs_found += len(mac_hits)
+        line = _MAC_RE.sub(mac_op, line)
+
+    out_lines.append(line)
+\end{lstlisting}
+
+A ordem dos estágios é deliberada: usernames são processados primeiro porque seus padrões podem conter strings que se sobrepõem parcialmente com outros tokens; IPs são processados antes de MACs porque a expressão de IP não interfere com o formato de MAC.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Recognizer Customizado de MAC Address}
+\label{sec:mac-recognizer}
+
+Um dos resultados técnicos relevantes do projeto foi a constatação de que o Microsoft Presidio, em sua versão padrão (\texttt{presidio-analyzer >= 2.2.355}), não inclui um recognizer para endereços MAC. Esse tipo de dado é tratado como PII de alta sensibilidade pela LGPD (art.\ 6°, IX), pois permite o perfilamento de dispositivos específicos ao longo do tempo.
+
+A implementação do recognizer customizado segue a interface \texttt{PatternRecognizer} do Presidio:
+
+\begin{lstlisting}[language=Python, caption={Recognizer customizado para enderecos MAC}, label={lst:mac-recognizer}]
+from presidio_analyzer import PatternRecognizer, Pattern
+
+mac_pattern = Pattern(
+    name="MAC_ADDRESS",
+    regex=r"\b([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}\b",
+    score=0.95
+)
+
+mac_recognizer = PatternRecognizer(
+    supported_entity="MAC_ADDRESS",
+    patterns=[mac_pattern],
+    context=["mac", "address", "device", "hardware", "interface"]
+)
+\end{lstlisting}
+
+O \textit{score} de 0,95 foi definido empiricamente após testes com o log real: a expressão regular é suficientemente estrita para o formato MAC que falsos positivos não foram observados, justificando um score próximo ao máximo. As palavras de contexto ampliam a precisão em casos onde o formato apareça em texto narrativo.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Operadores de Anonimização}
+\label{sec:operadores}
+
+Os operadores são implementados como funções de ordem superior que recebem o objeto \texttt{Match} da expressão regular e retornam a string substituída. Essa abordagem espelha semanticamente o \texttt{OperatorConfig} do Presidio AnonymizerEngine, tornando trivial a futura migração para o pipeline completo do Presidio.
+
+\subsection{Operadores para Endereços IP}
+\label{subsec:op-ip}
+
+\begin{lstlisting}[language=Python, caption={Fabrica de operadores para enderecos IP}, label={lst:op-ip}]
+def _make_ip_op(mode: str, hash_type: str):
+    if mode == "hash":
+        # Pseudonimizacao deterministica: mesmo IP -> mesmo hash
+        return lambda m: hashlib.new(hash_type,
+                                     m.group().encode()).hexdigest()
+    if mode == "mask":
+        def _mask(m):
+            parts = m.group().split(".")
+            return f"{parts[0]}.***.***.*{parts[-1][-1]}"
+        return _mask
+    if mode == "redact":
+        return lambda m: "<IP_REMOVIDO>"
+    return lambda m: "<IP_ANONIMIZADO>"
+\end{lstlisting}
+
+A propriedade determinística do hash SHA-256 é essencial para o caso de uso de análise de incidentes: o analista pode agrupar todos os eventos originados de um mesmo IP sem conhecer o endereço real, correlacionando tentativas de acesso, padrões de tráfego e comportamento anômalo com segurança jurídica.
+
+\subsection{Operadores para Endereços MAC}
+\label{subsec:op-mac}
+
+\begin{lstlisting}[language=Python, caption={Fabrica de operadores para enderecos MAC}, label={lst:op-mac}]
+def _make_mac_op(mode: str, mask_char: str):
+    mc = mask_char
+    if mode == "hash":
+        return lambda m: hashlib.sha256(
+            m.group().encode()).hexdigest()[:17]
+    if mode == "mask":
+        def _mask(m):
+            # Mascara os 3 primeiros octetos (OUI/fabricante)
+            # Preserva os 3 ultimos (identificador do dispositivo)
+            tail = m.group()[9:]
+            return f"{mc*2}:{mc*2}:{mc*2}:{tail}"
+        return _mask
+    if mode == "redact":
+        return lambda m: "<MAC_REMOVIDO>"
+    return lambda m: "<MAC_ANONIMIZADO>"
+\end{lstlisting}
+
+O modo de mascaramento padrão preserva os três octetos finais do MAC por uma decisão de equilíbrio: os três primeiros octetos formam o OUI (\textit{Organizationally Unique Identifier}), que identifica o fabricante e por si só não identifica o titular. Os três finais identificam o dispositivo específico e constituem o dado pessoal sensível. O resultado final \texttt{**:**:**:XX:XX:XX} remove a possibilidade de perfilamento sem eliminar toda a utilidade do dado para análise de topologia de rede.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Interface Web (\texttt{app.py})}
+\label{sec:interface}
+
+A interface web foi desenvolvida em Streamlit e estruturada em quatro áreas funcionais:
+
+\begin{alineas}
+    \item \textbf{Painel lateral de configuração}: o usuário seleciona, de forma independente, o método de anonimização para IPs (com seleção do algoritmo de hash quando aplicável), para MACs e o comportamento para usernames. O painel exibe também os artigos LGPD cobertos por cada configuração, servindo como guia de conformidade embutido na interface;
+
+    \item \textbf{Área de upload}: aceita arquivos \texttt{.log}, \texttt{.txt} e \texttt{.zip}. Arquivos comprimidos são descompactados em memória (RAM), sem gravação em disco, antes do processamento;
+
+    \item \textbf{Painel de resultados}: exibe métricas da execução (linhas processadas, contagens por tipo de PII, tempo decorrido e tamanho do log anonimizado) e um preview lado a lado de até 10 linhas com PII detectada, antes e depois da anonimização, permitindo auditoria visual imediata;
+
+    \item \textbf{Download}: o log anonimizado é disponibilizado para download direto no navegador, com nomenclatura automática (\texttt{<nome-original>\_lgpd\_anonimizado.log}).
+\end{alineas}
+
+O processamento assíncrono com barra de progresso (atualizada a cada 0,5\% do arquivo) mantém a interface responsiva durante o processamento de arquivos grandes. O motor é carregado com cache (\texttt{@st.cache\_resource}), evitando reinicializações desnecessárias entre execuções consecutivas.

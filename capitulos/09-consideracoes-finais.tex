@@ -1,0 +1,55 @@
+% ==============================================================================
+% CAPÍTULO 9 — CONSIDERAÇÕES FINAIS
+% ==============================================================================
+
+\chapter{Considerações Finais}
+\label{cap:conclusao}
+
+Este trabalho desenvolveu uma proposta estruturada de governança e proteção de dados aplicada a logs de infraestrutura de tecnologia da informação, respondendo ao problema norteador proposto: como estruturar políticas, regras e diretrizes para o uso, anonimização, sanitização, retenção e compartilhamento de dados de logs, de forma a garantir conformidade legal, apoiar a tomada de decisão em segurança da informação e subsidiar planos de resposta a incidentes.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Síntese das Contribuições}
+\label{sec:sintese}
+
+O projeto produziu as seguintes contribuições concretas:
+
+\begin{alineas}
+    \item \textbf{Análise da natureza dos dados} (\autoref{cap:natureza}): identificação e classificação dos tipos de dados pessoais presentes em logs de roteadores, servidores e firewalls, com ênfase no risco de reidentificação por combinação de quasi-identificadores -- um aspecto frequentemente negligenciado em abordagens campo a campo;
+
+    \item \textbf{Fundamentação legal e normativa} (\autoref{cap:legal}): mapeamento detalhado dos dispositivos da LGPD, do GDPR e das normativas da ANPD (incluindo a Resolução CD/ANPD n°~19/2024) aplicáveis ao tratamento de logs, com análise das bases legais disponíveis e das obrigações do controlador;
+
+    \item \textbf{Políticas de segurança} (\autoref{cap:politicas}): conjunto estruturado de políticas de coleta, acesso (com modelo RBAC), retenção (com prazos fundamentados), descarte seguro, compartilhamento e documentação de atividades de tratamento -- cobrindo todo o ciclo de vida do dado no log;
+
+    \item \textbf{Diretrizes de anonimização} (\autoref{cap:anonimizacao}): técnicas de desidentificação recomendadas por tipo de dado, com código Python demonstrativo para pseudonimização por hash com \textit{salt}, mascaramento de endereços MAC, generalização temporal de timestamps e pipeline de anonimização com Microsoft Presidio;
+
+    \item \textbf{Plano de contingência} (\autoref{cap:contingencia}): plano de resposta a incidentes em seis fases, alinhado ao NIST SP 800-61 e às obrigações de notificação da LGPD e da Resolução CD/ANPD n°~2/2022;
+
+    \item \textbf{Análise de conformidade} (\autoref{cap:conformidade}): avaliação artigo por artigo do alinhamento das propostas com LGPD, GDPR e Resolução CD/ANPD n°~19/2024, com identificação de lacunas e recomendações adicionais;
+
+    \item \textbf{Reflexão ética} (\autoref{cap:etica}): discussão crítica sobre logging como instrumento de vigilância, assimetria de poder, riscos sociais do uso inadequado de logs e responsabilidade dos profissionais de computação.
+\end{alineas}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Conclusões}
+\label{sec:conclusoes}
+
+Os objetivos específicos propostos foram integralmente alcançados. O trabalho demonstrou que o tratamento de dados pessoais em logs de infraestrutura é uma questão simultaneamente técnica, legal e ética, que exige uma abordagem integrada -- não basta implementar criptografia sem definir políticas de acesso; não basta ter políticas sem treinamento; não basta cumprir a lei sem refletir sobre os impactos reais sobre as pessoas.
+
+A análise comparativa entre LGPD e GDPR revelou que, em vários aspectos, a legislação brasileira é menos prescritiva que o regulamento europeu -- especialmente quanto ao Privacy by Design e à obrigatoriedade do RIPD. Essa menor prescritividade não deve ser interpretada como permissividade: o espírito da LGPD, expresso em seus princípios, aponta para o mesmo nível de proteção. As políticas propostas adotaram o padrão mais rigoroso em todos os pontos de divergência, garantindo compatibilidade com ambas as legislações.
+
+O uso do Microsoft Presidio como ferramenta demonstrativa evidenciou tanto as possibilidades quanto as limitações das soluções de código aberto para anonimização de logs: a ferramenta é eficaz e extensível, mas exige adaptação para o contexto específico de infraestrutura de rede -- como demonstrado pela necessidade de implementar um recognizer customizado para endereços MAC, ausente em seu conjunto padrão.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Trabalhos Futuros}
+\label{sec:trabalhos-futuros}
+
+A partir das lacunas identificadas e das limitações do escopo deste projeto, propõem-se os seguintes desdobramentos:
+
+\begin{itemize}
+    \item Desenvolver um modelo de Relatório de Impacto à Proteção de Dados (RIPD) específico para operações de logging em infraestrutura de TI, seguindo as orientações da ANPD;
+    \item Elaborar procedimentos detalhados para atendimento a solicitações de direitos dos titulares (acesso, correção, eliminação) no contexto de dados presentes em logs;
+    \item Estender as diretrizes de anonimização para logs de outros fabricantes e sistemas (Cisco IOS, pfSense, Nginx, Apache), ampliando a aplicabilidade do conjunto de políticas;
+    \item Implementar e avaliar as políticas propostas em um ambiente real controlado, mensurando o impacto sobre a operação de segurança e o esforço de conformidade;
+    \item Desenvolver um questionário de autoavaliação de maturidade em governança de logs, permitindo que organizações identifiquem rapidamente suas lacunas de conformidade em relação às políticas propostas;
+    \item Investigar a aplicabilidade de técnicas de privacidade diferencial a logs de infraestrutura, avaliando o equilíbrio entre proteção matemática garantida e utilidade analítica para fins de segurança da informação.
+\end{itemize}

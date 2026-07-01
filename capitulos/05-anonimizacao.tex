@@ -1,0 +1,188 @@
+% ==============================================================================
+% CAPÍTULO 5 — DIRETRIZES DE ANONIMIZAÇÃO, PSEUDONIMIZAÇÃO E SANITIZAÇÃO
+% ==============================================================================
+
+\chapter{Diretrizes de Anonimização, Pseudonimização e Sanitização}
+\label{cap:anonimizacao}
+
+Este capítulo desenvolve as diretrizes técnicas para a desidentificação de dados pessoais em logs de infraestrutura, apresentando as técnicas reconhecidas pela ANPD e pelo GDPR e demonstrando sua aplicação prática por meio do framework Microsoft Presidio em logs MikroTik RouterOS.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Conceitos e Distinções}
+\label{sec:conceitos-anon}
+
+A literatura de privacidade e a legislação distinguem três operações de desidentificação com efeitos legais e técnicos distintos:
+
+\begin{alineas}
+    \item \textbf{Anonimização}: processo irreversível pelo qual o dado perde completamente a possibilidade de associação a um titular, mesmo com o uso de meios técnicos razoáveis. Dados devidamente anonimizados saem do escopo de aplicação da LGPD (art.\ 12);
+    \item \textbf{Pseudonimização}: substituição de identificadores diretos por pseudônimos, mantendo a possibilidade de reversão mediante informação adicional mantida separadamente. O dado pseudonimizado continua sendo dado pessoal nos termos da LGPD, mas seu tratamento beneficia-se de salvaguardas reduzidas em determinados contextos (art.\ 13, §4°);
+    \item \textbf{Sanitização}: remoção ou modificação de dados em um documento ou arquivo para reduzir riscos, sem necessariamente atingir o grau de anonimização completa. Inclui técnicas como supressão de campos, truncamento e mascaramento parcial.
+\end{alineas}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Técnicas Recomendadas por Tipo de Dado}
+\label{sec:tecnicas}
+
+A escolha da técnica de anonimização deve considerar a finalidade do log após o tratamento: se será usado apenas para auditoria interna (onde correlação entre eventos é necessária) ou para compartilhamento externo (onde a identidade do titular é irrelevante). O \autoref{qdr:tecnicas} apresenta as técnicas recomendadas para cada tipo de dado pessoal presente em logs de infraestrutura.
+
+\begin{quadro}[htb]
+    \caption{\label{qdr:tecnicas}Técnicas de anonimização recomendadas por tipo de dado em logs}
+    \begin{tabular}{|p{2.8cm}|p{3cm}|p{3.2cm}|p{4.8cm}|}
+        \hline
+        \textbf{Tipo de dado} & \textbf{Uso interno} & \textbf{Compartilhamento externo} & \textbf{Justificativa} \\
+        \hline
+        Endereço IP & Hash SHA-256 (pseudonimização) & Generalização ou supressão & Hash preserva correlação entre eventos sem expor o IP real \\
+        \hline
+        Endereço MAC & Mascaramento dos 3 primeiros octetos & Supressão completa & Os 3 primeiros octetos identificam o fabricante; os 3 últimos identificam o dispositivo \\
+        \hline
+        Nome de usuário & Pseudonimização por hash & Supressão & Necessário para correlação de ações do mesmo usuário em auditorias \\
+        \hline
+        Timestamp & Preservar (necessário) & Generalização (hora ou dia) & Precisão de segundo cria risco de quasi-identificação por combinação \\
+        \hline
+        Nome de host & Pseudonimização & Supressão & Pode revelar identidade organizacional ou pessoal \\
+        \hline
+        Porta TCP/UDP & Preservar & Preservar ou generalizar & Baixo risco isolado; relevante para análise de segurança \\
+        \hline
+    \end{tabular}
+    \legend{Fonte: Própria dos autores (2025), com base em \citeonline{anpd2022anonimizacao}.}
+\end{quadro}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Pseudonimização por Hash Criptográfico}
+\label{sec:hash}
+
+A pseudonimização por hash aplica uma função de resumo criptográfico ao valor original, produzindo uma representação de tamanho fixo e irreversível sem a chave. A propriedade determinística -- o mesmo dado sempre produz o mesmo resumo -- é especialmente valiosa para análise de incidentes: permite correlacionar todos os eventos de um mesmo endereço IP sem conhecer o endereço real \cite{dwork2014differential}.
+
+Para logs de infraestrutura, recomenda-se o uso de SHA-256 ou SHA-512 com \textit{salt} -- um valor aleatório concatenado ao dado antes do hash -- para prevenir ataques de dicionário ou de pré-computação (rainbow tables). O \textit{salt} deve ser mantido separadamente dos logs, em cofre de segredos com acesso restrito.
+
+\begin{lstlisting}[language=Python, caption={Pseudonimizacao de IP com SHA-256 e salt}, label={lst:hash-ip}]
+import hashlib, secrets
+
+# Gerar salt (deve ser armazenado separadamente dos logs)
+SALT = secrets.token_hex(32)
+
+def pseudonimizar_ip(ip: str) -> str:
+    """
+    Aplica SHA-256 com salt ao endereco IP.
+    Mesmo IP sempre gera mesmo hash (correlacao preservada).
+    Sem o salt, o hash e irreversivel por dicionario.
+    """
+    dado = (SALT + ip).encode("utf-8")
+    return hashlib.sha256(dado).hexdigest()
+
+# Exemplo de uso
+ip_original = "192.168.1.105"
+ip_pseudo   = pseudonimizar_ip(ip_original)
+# Resultado: string hexadecimal de 64 caracteres
+# Ex: "a3f2c1d8e7b6..." (sempre o mesmo para o mesmo IP + salt)
+\end{lstlisting}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Mascaramento Parcial}
+\label{sec:mascaramento}
+
+O mascaramento substitui parte do valor por caracteres de máscara, preservando o restante para fins de contexto. É indicado quando alguma informação estrutural do dado precisa ser preservada.
+
+\begin{lstlisting}[language=Python, caption={Mascaramento de MAC -- preserva 3 ultimos octetos}, label={lst:mask-mac}]
+import re
+
+_MAC_RE = re.compile(r"\b([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}\b")
+
+def mascarar_mac(mac: str) -> str:
+    """
+    Mascara os 3 primeiros octetos (OUI/fabricante).
+    Preserva os 3 ultimos (identificador do dispositivo).
+    Resultado: **:**:**:XX:XX:XX
+    """
+    partes = mac.split(":")
+    return "**:**:**:" + ":".join(partes[3:])
+
+def mascarar_macs_em_linha(linha: str) -> str:
+    return _MAC_RE.sub(lambda m: mascarar_mac(m.group()), linha)
+
+# Exemplo
+linha = "src-mac 4C:CC:6A:11:22:33, proto TCP"
+print(mascarar_macs_em_linha(linha))
+# Saida: "src-mac **:**:**:11:22:33, proto TCP"
+\end{lstlisting}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Generalização Temporal}
+\label{sec:generalizacao-temporal}
+
+A generalização temporal trunca a precisão dos \textit{timestamps}, reduzindo o risco de quasi-identificação por combinação de horário com outros atributos. Para compartilhamento externo, recomenda-se truncar ao nível de hora ou dia.
+
+\begin{lstlisting}[language=Python, caption={Generalizacao temporal de timestamps em logs MikroTik}, label={lst:timestamp}]
+import re
+from datetime import datetime
+
+# Padrao de timestamp MikroTik: "jun/15 08:23:14"
+_TS_RE = re.compile(
+    r"([a-z]{3}/\d{2}\s+)(\d{2}:\d{2}:\d{2})",
+    re.IGNORECASE
+)
+
+def generalizar_timestamp(linha: str,
+                           nivel: str = "hora") -> str:
+    """
+    nivel='hora' -> preserva hh:00:00
+    nivel='dia'  -> remove horario completamente
+    """
+    def substituir(m):
+        if nivel == "hora":
+            hora = m.group(2).split(":")[0]
+            return m.group(1) + hora + ":00:00"
+        return m.group(1).strip()  # remove horario
+
+    return _TS_RE.sub(substituir, linha)
+
+# Exemplos
+linha = "jun/15 08:23:14 firewall,info ..."
+print(generalizar_timestamp(linha, nivel="hora"))
+# Saida: "jun/15 08:00:00 firewall,info ..."
+print(generalizar_timestamp(linha, nivel="dia"))
+# Saida: "jun/15 firewall,info ..."
+\end{lstlisting}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Pipeline de Anonimização com Microsoft Presidio}
+\label{sec:presidio-pipeline}
+
+O Microsoft Presidio é um framework de código aberto para detecção e anonimização de PII em textos não estruturados \cite{microsoft2023presidio}. Sua arquitetura em dois componentes -- Presidio Analyzer (detecção) e Presidio Anonymizer (transformação) -- permite a construção de pipelines configuráveis que aplicam técnicas distintas a cada tipo de entidade.
+
+Para logs MikroTik, implementou-se um pipeline híbrido que combina detecção por expressões regulares (para escala) com os operadores do Presidio AnonymizerEngine (para semântica e configurabilidade). Um resultado técnico relevante do projeto foi a constatação de que o Presidio não inclui nativamente um recognizer para endereços MAC, tornando necessária a implementação de um \texttt{PatternRecognizer} customizado:
+
+\begin{lstlisting}[language=Python, caption={Recognizer customizado de MAC Address para o Microsoft Presidio}, label={lst:mac-presidio}]
+from presidio_analyzer import PatternRecognizer, Pattern
+
+# MAC_ADDRESS nao existe no conjunto padrao do Presidio
+mac_pattern = Pattern(
+    name="MAC_ADDRESS_PATTERN",
+    regex=r"\b([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}\b",
+    score=0.95
+)
+
+mac_recognizer = PatternRecognizer(
+    supported_entity="MAC_ADDRESS",
+    patterns=[mac_pattern],
+    context=["mac", "address", "device", "src-mac", "dst-mac"]
+)
+# Registrar no AnalyzerEngine antes do uso:
+# analyzer.registry.add_recognizer(mac_recognizer)
+\end{lstlisting}
+
+O pipeline completo, com processamento de 738.846 linhas de log real (50~MB), anonimizou 258.688~IPs, 148.120~MACs e 73.867~usernames em aproximadamente 9 segundos em hardware convencional, demonstrando viabilidade operacional para uso cotidiano.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Diretrizes para Aplicação}
+\label{sec:diretrizes-aplicacao}
+
+Com base nas técnicas descritas, propõem-se as seguintes diretrizes para a organização que adotar as políticas deste projeto:
+
+\begin{alineas}
+    \item Aplicar anonimização automaticamente no momento da coleta, sempre que a finalidade primária do log não exigir a identidade do titular -- eliminando o risco na origem;
+    \item Para logs que precisam preservar a capacidade de correlação (uso interno de segurança), adotar pseudonimização por hash com \textit{salt}; para compartilhamento externo, aplicar supressão ou generalização;
+    \item Manter separação física ou lógica entre o \textit{salt} e os logs pseudonimizados -- o acesso ao \textit{salt} deve ser restrito ao administrador de segurança;
+    \item Documentar o processo de anonimização aplicado a cada categoria de log, incluindo o algoritmo utilizado, os campos tratados e a data de aplicação, para fins de demonstração de conformidade (art.\ 6°, X, LGPD -- responsabilização);
+    \item Revisar anualmente a efetividade das técnicas adotadas, considerando a evolução das capacidades técnicas de reidentificação.
+\end{alineas}

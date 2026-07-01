@@ -1,0 +1,86 @@
+% ==============================================================================
+% CAPÍTULO 7 — ANÁLISE DE CONFORMIDADE
+% ==============================================================================
+
+\chapter{Análise de Conformidade}
+\label{cap:conformidade}
+
+Este capítulo analisa em que medida as políticas e diretrizes propostas nos capítulos anteriores atendem às exigências da LGPD, do GDPR e das normativas da ANPD, identificando pontos de convergência, divergência e lacunas que devem ser consideradas na implementação.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Conformidade com a LGPD}
+\label{sec:conformidade-lgpd}
+
+A \autoref{tab:conformidade-lgpd} apresenta a análise artigo por artigo dos principais dispositivos da LGPD aplicáveis ao tratamento de logs, indicando como cada um é endereçado pelas propostas deste trabalho.
+
+\begin{table}[htb]
+    \ABNTEXfontereduzida
+    \caption{Análise de conformidade com a LGPD}
+    \label{tab:conformidade-lgpd}
+    \begin{tabular}{p{1.8cm}p{2.5cm}p{3.5cm}p{5.5cm}}
+        \toprule
+        \textbf{Artigo} & \textbf{Dispositivo} & \textbf{Exigência} & \textbf{Endereçamento nas propostas} \\
+        \midrule
+        Art.\ 6°, I--X & Princípios & Observância dos dez princípios no tratamento & Cap.\ 4: políticas baseadas nos princípios; Cap.\ 5: técnicas alinhadas à minimização \\
+        Art.\ 7° & Bases legais & Tratamento fundado em base legal específica & Cap.\ 4: identificação das bases legais por categoria de log \\
+        Art.\ 12 & Anonimização & Dados anonimizados saem do escopo da LGPD & Cap.\ 5: diretrizes e código para anonimização efetiva \\
+        Art.\ 37 & Registros & Manutenção de registro das operações de tratamento & Cap.\ 4, seção 4.6: documentação obrigatória das atividades \\
+        Art.\ 38 & RIPD & Avaliação de impacto em tratamentos de alto risco & Cap.\ 3: identificação da obrigatoriedade do RIPD para monitoramento sistemático \\
+        Art.\ 46 & Segurança & Medidas técnicas e administrativas de proteção & Cap.\ 4: RBAC, criptografia, MFA, trilha de auditoria \\
+        Art.\ 48 & Notificação & Comunicação de incidentes à ANPD e titulares & Cap.\ 6: plano de resposta com fase de notificação estruturada \\
+        \bottomrule
+    \end{tabular}
+    \legend{Fonte: Própria dos autores (2025), com base em \citeonline{brasil2018lgpd}.}
+\end{table}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Conformidade com o GDPR}
+\label{sec:conformidade-gdpr}
+
+O GDPR estabelece padrões em alguns aspectos mais detalhados do que a LGPD, especialmente quanto ao Privacy by Design (art.\ 25) e ao DPIA (art.\ 35). A \autoref{tab:lgpd-gdpr} compara os dois regulamentos nos pontos mais relevantes para o contexto de logs.
+
+\begin{table}[htb]
+    \ABNTEXfontereduzida
+    \caption{Comparativo LGPD × GDPR para tratamento de logs de infraestrutura}
+    \label{tab:lgpd-gdpr}
+    \begin{tabular}{p{3.5cm}p{5cm}p{5cm}}
+        \toprule
+        \textbf{Aspecto} & \textbf{LGPD} & \textbf{GDPR} \\
+        \midrule
+        Escopo de aplicação & Dados de titulares no Brasil & Dados de titulares na UE \\
+        Conceito de dado pessoal & Art.\ 5°, I: identificado ou identificável & Art.\ 4°, 1: mesma definição; inclui explicitamente dados de localização e identificadores online \\
+        Privacy by Design & Implícito no art.\ 46 & Explícito no art.\ 25 \\
+        Avaliação de impacto & Art.\ 38: RIPD, a critério da ANPD & Art.\ 35: DPIA obrigatório para monitoramento sistemático \\
+        Prazo de notificação & Resolução CD/ANPD n°~2/2022: 2 dias úteis & Art.\ 33: 72 horas \\
+        Sanção máxima & 2\% do faturamento, até R\$~50 milhões & 4\% do faturamento mundial anual ou €~20 milhões \\
+        DPO & Art.\ 41: Encarregado (recomendado) & Art.\ 37--39: DPO (obrigatório em determinados casos) \\
+        \bottomrule
+    \end{tabular}
+    \legend{Fonte: Própria dos autores (2025), com base em \citeonline{brasil2018lgpd} e \citeonline{gdpr2016}.}
+\end{table}
+
+As propostas deste trabalho adotam o padrão mais rigoroso quando há divergência entre LGPD e GDPR, garantindo que organizações sujeitas a ambas as legislações possam usar as políticas propostas sem adaptação.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Conformidade com a Resolução CD/ANPD n° 19/2024}
+\label{sec:conformidade-anpd}
+
+A Resolução CD/ANPD n°~19/2024 reforça as obrigações de segurança e resposta a incidentes já previstas na LGPD, com maior detalhamento operacional \cite{anpd2024resolucao}. Os pontos de maior relevância para este projeto são:
+
+\begin{alineas}
+    \item \textbf{Inventário de tratamento}: a resolução reforça a obrigação de manutenção de registros detalhados das atividades de tratamento, endereçada na Seção~\ref{sec:documentacao} do \autoref{cap:politicas};
+    \item \textbf{Medidas de segurança proporcionais ao risco}: a resolução adota a abordagem de risco como critério para definir as medidas técnicas necessárias. As políticas do \autoref{cap:politicas} seguem essa abordagem ao categorizar dados por sensibilidade e definir controles proporcionais;
+    \item \textbf{Gestão de incidentes}: a resolução detalha os requisitos do processo de notificação, integralmente incorporados no plano do \autoref{cap:contingencia}.
+\end{alineas}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Lacunas e Recomendações Adicionais}
+\label{sec:lacunas}
+
+A análise de conformidade revela três lacunas que as organizações devem considerar ao implementar as políticas propostas:
+
+\begin{alineas}
+    \item \textbf{RIPD/DPIA}: as políticas propõem a realização do RIPD para tratamentos de alto risco, mas não incluem um modelo de relatório. Recomenda-se que cada organização elabore seu próprio RIPD seguindo as orientações da ANPD, utilizando o guia publicado em 2023;
+    \item \textbf{Transferência internacional}: organizações que utilizam serviços de nuvem internacionais para armazenar logs devem verificar se o país de destino oferece nível adequado de proteção nos termos do art.\ 33 da LGPD, o que não foi detalhado neste trabalho por depender do contexto específico de cada organização;
+    \item \textbf{Direitos dos titulares}: os logs podem ser alvo de solicitações de acesso, correção ou eliminação por parte dos titulares (arts.\ 17--22, LGPD). As políticas propostas não detalham os procedimentos para atendimento a essas solicitações no contexto específico de logs, o que deve ser desenvolvido como complemento.
+\end{alineas}

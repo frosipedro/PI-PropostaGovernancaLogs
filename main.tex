@@ -1,0 +1,259 @@
+%% =============================================================================
+%% Projeto Integrador — Ciência da Computação — UNIJUÍ
+%% Governança, Segurança e Proteção de Dados em Processamento de
+%% Logs de Infraestrutura de Tecnologia da Informação
+%% =============================================================================
+
+\documentclass[
+    12pt,
+    oneside,
+    a4paper,
+    chapter=TITLE,
+    section=TITLE,
+    english,
+    brazil
+]{abntex2}
+
+% ==============================================================================
+% PACOTES ESSENCIAIS
+% ==============================================================================
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+
+\usepackage[brazilian,hyperpageref]{backref}
+\usepackage[alf,bibjustif]{abntex2cite}
+
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{subfig}
+\usepackage{pdfpages}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{microtype}
+\usepackage{indentfirst}
+\usepackage{color}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{enumitem}
+\usepackage{totcount}
+
+\input{unijui.sty}
+
+% ==============================================================================
+% BACKREF
+% ==============================================================================
+\renewcommand{\backrefpagesname}{Citado na(s) página(s):~}
+\renewcommand{\backref}{}
+\renewcommand*{\backrefalt}[4]{%
+    \ifcase #1%
+        Nenhuma citação no texto.%
+    \or
+        Citado na página #2.%
+    \else
+        Citado #1 vezes nas páginas #2.%
+    \fi}
+
+% ==============================================================================
+% LISTAGENS DE CÓDIGO
+% ==============================================================================
+\lstset{
+    basicstyle=\ttfamily\small,
+    numbers=left,
+    numberstyle=\tiny\color{gray},
+    stepnumber=1,
+    numbersep=8pt,
+    backgroundcolor=\color{white},
+    showspaces=false,
+    showstringspaces=false,
+    showtabs=false,
+    frame=single,
+    rulecolor=\color{black},
+    tabsize=2,
+    captionpos=b,
+    breaklines=true,
+    breakatwhitespace=false,
+    keywordstyle=\color{blue}\bfseries,
+    commentstyle=\color{green!60!black},
+    stringstyle=\color{red},
+    escapeinside={\%*}{*)},
+    literate=
+        {á}{{\'a}}1 {é}{{\'e}}1 {í}{{\'i}}1 {ó}{{\'o}}1 {ú}{{\'u}}1
+        {Á}{{\'A}}1 {É}{{\'E}}1 {Í}{{\'I}}1 {Ó}{{\'O}}1 {Ú}{{\'U}}1
+        {ã}{{\~a}}1 {õ}{{\~o}}1 {Ã}{{\~A}}1 {Õ}{{\~O}}1
+        {ç}{{\c{c}}}1 {Ç}{{\c{C}}}1
+        {ê}{{\^e}}1 {â}{{\^a}}1 {ô}{{\^o}}1
+}
+
+% ==============================================================================
+% DADOS DO TRABALHO
+% ==============================================================================
+\titulo{Governança, Segurança e Proteção de Dados em\\[1mm]
+        Processamento de Logs de Infraestrutura de\\[1mm]
+        Tecnologia da Informação}
+\autor{Cristian dos Santos Siqueira \and Daniel Hennig \and
+       Marco Mantônio Hendge \and William Rafael Fagundes \and Pedro Frosi}
+\local{Ijuí/RS}
+\data{2025}
+\orientador{Prof. Tiago Mallmann Rohde}
+\instituicao{%
+    Universidade Regional do Noroeste do\\[1mm]
+    Estado do Rio Grande do Sul}
+
+\campus{Ijuí}
+\curso{Ciência da Computação}
+\professordabanca{Prof(a). xxxx}
+\datadabanca{XX}{XXX}{2025}
+
+\preambulo{Trabalho de Projeto Integrador apresentado ao curso de
+Ciência da Computação da Universidade Regional do Noroeste do Estado
+do Rio Grande do Sul -- UNIJUÍ, como requisito parcial para aprovação
+na disciplina de Segurança de Dados}
+
+% ==============================================================================
+% RESUMO
+% ==============================================================================
+\resumoemportugues{%
+Os logs de infraestrutura de tecnologia da informação -- gerados por roteadores,
+servidores, firewalls e sistemas correlatos -- contêm dados capazes de identificar
+pessoas naturais de forma direta ou indireta, sujeitando seu tratamento às
+disposições da Lei Geral de Proteção de Dados Pessoais (LGPD -- Lei n°~13.709/2018),
+do Regulamento Geral de Proteção de Dados europeu (GDPR) e das normativas da
+Autoridade Nacional de Proteção de Dados (ANPD), em especial a Resolução
+CD/ANPD n°~19/2024. Este trabalho desenvolve uma proposta estruturada de
+governança e proteção de dados aplicada a logs de infraestrutura de TI,
+contemplando: a identificação e classificação dos dados pessoais presentes
+nesses registros; a fundamentação legal e normativa aplicável; políticas de
+segurança da informação para uso, acesso, retenção e descarte de logs;
+diretrizes de anonimização, pseudonimização e sanitização, com demonstração
+prática por meio do framework Microsoft Presidio aplicado a logs MikroTik
+RouterOS; um plano de contingência e resposta a incidentes; e uma análise
+crítica de conformidade e dos impactos éticos, sociais e institucionais do
+uso de dados de logs. O conjunto das propostas visa apoiar organizações na
+tomada de decisão em segurança da informação e no cumprimento das obrigações
+legais vigentes.%
+}
+\palavraschaveemportugues{lgpd; governança de dados; logs de infraestrutura;
+anonimização; segurança da informação; microsoft presidio; anpd; gdpr.}
+
+% ==============================================================================
+% APARÊNCIA DO PDF
+% ==============================================================================
+\makeatletter
+\hypersetup{
+    pdftitle={\@title},
+    pdfauthor={\@author},
+    pdfsubject={\imprimirpreambulo},
+    pdfcreator={LaTeX com abnTeX2},
+    pdfkeywords={lgpd}{governança}{logs}{anonimização}{segurança},
+    colorlinks=true,
+    linkcolor=black,
+    citecolor=black,
+    filecolor=black,
+    urlcolor=black,
+    bookmarksdepth=4
+}
+\makeatother
+
+\setlength{\parindent}{1.3cm}
+\setlength{\parskip}{0.2cm}
+
+% ==============================================================================
+% INÍCIO DO DOCUMENTO
+% ==============================================================================
+\begin{document}
+\selectlanguage{brazil}
+\frenchspacing
+
+\pretextual
+
+\imprimircapa
+\imprimirfolhaderosto
+% \imprimirfolhadabanca
+
+\begin{agradecimentos}
+Agradecemos ao Prof.\ Tiago Mallmann Rohde pela orientação e pelo espaço
+de aprendizado proporcionado ao longo da disciplina. À UNIJUÍ, pelo suporte
+institucional. Aos colegas de curso que contribuíram com discussões e revisões
+ao longo do desenvolvimento deste projeto.
+\end{agradecimentos}
+
+\begin{resumo}
+    \imprimirresumo
+    \par
+    \noindent \textbf{Palavras-chave}: \imprimirpalavraschave
+\end{resumo}
+
+\regtotcounter{figure}
+\ifnum\totvalue{figure}>0
+    \pdfbookmark[0]{\listfigurename}{lof}
+    \listoffigures*
+    \cleardoublepage
+\fi
+
+\regtotcounter{quadro}
+\ifnum\totvalue{quadro}>0
+    \pdfbookmark[0]{\listofquadrosname}{loq}
+    \listofquadros*
+    \cleardoublepage
+\fi
+
+\regtotcounter{table}
+\ifnum\totvalue{table}>0
+    \pdfbookmark[0]{\listtablename}{lot}
+    \listoftables*
+    \cleardoublepage
+\fi
+
+\begin{siglas}
+    \item[ABNT]   Associação Brasileira de Normas Técnicas
+    \item[ANPD]   Autoridade Nacional de Proteção de Dados
+    \item[GDPR]   General Data Protection Regulation
+    \item[IP]     Internet Protocol
+    \item[ISP]    Internet Service Provider
+    \item[LGPD]   Lei Geral de Proteção de Dados Pessoais
+    \item[MAC]    Media Access Control
+    \item[NLP]    Natural Language Processing
+    \item[PII]    Personally Identifiable Information
+    \item[RIPD]   Relatório de Impacto à Proteção de Dados
+    \item[SGSI]   Sistema de Gestão de Segurança da Informação
+    \item[SIEM]   Security Information and Event Management
+    \item[SOC]    Security Operations Center
+    \item[SSH]    Secure Shell
+    \item[TI]     Tecnologia da Informação
+    \item[UNIJUÍ] Universidade Regional do Noroeste do Estado do Rio Grande do Sul
+\end{siglas}
+
+\pdfbookmark[0]{\contentsname}{toc}
+\tableofcontents*
+\cleardoublepage
+
+% ==========================================================================
+% TEXTUAIS
+% ==========================================================================
+\textual
+
+\input{capitulos/01-introducao}
+\input{capitulos/02-natureza-dos-dados}
+\input{capitulos/03-fundamentacao-legal}
+\input{capitulos/04-politicas-de-seguranca}
+\input{capitulos/05-anonimizacao}
+\input{capitulos/06-plano-de-contingencia}
+\input{capitulos/07-analise-de-conformidade}
+\input{capitulos/08-reflexao-etica}
+\input{capitulos/09-consideracoes-finais}
+
+% ==========================================================================
+% PÓS-TEXTUAIS
+% ==========================================================================
+\postextual
+
+\bibliography{referencias}
+
+\begin{apendicesenv}
+    \input{apendices/apendice-a}
+\end{apendicesenv}
+
+\end{document}

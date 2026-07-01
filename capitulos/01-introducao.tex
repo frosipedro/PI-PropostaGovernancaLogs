@@ -1,0 +1,60 @@
+% ==============================================================================
+% CAPÍTULO 1 — INTRODUÇÃO
+% ==============================================================================
+
+\chapter{Introdução}
+\label{cap:introducao}
+
+A infraestrutura de tecnologia da informação das organizações modernas -- composta por roteadores, servidores, firewalls, sistemas de detecção de intrusão e demais dispositivos de rede -- produz continuamente registros operacionais denominados \textit{logs}. Esses arquivos documentam eventos como conexões de rede, autenticações, transferências de dados, falhas de sistema e tentativas de acesso não autorizado. Longe de serem meros registros técnicos, os logs contêm informações que, isoladamente ou em combinação, são capazes de identificar pessoas naturais de forma direta ou indireta -- configurando, portanto, dados pessoais nos termos do art.\ 5°, inciso I, da Lei Geral de Proteção de Dados Pessoais (LGPD -- Lei n°~13.709/2018) \cite{brasil2018lgpd}.
+
+Essa realidade impõe às organizações responsabilidades que vão além da gestão técnica da infraestrutura. O tratamento inadequado de logs -- seja pelo armazenamento indiscriminado, pelo compartilhamento sem controles ou pela ausência de políticas de retenção e descarte -- pode gerar riscos legais, éticos e institucionais significativos. No Brasil, a ANPD já sinalizou, por meio de sua Resolução CD/ANPD n°~19/2024, a crescente atenção regulatória sobre práticas de tratamento de dados em ambientes corporativos \cite{anpd2024resolucao}. No cenário internacional, o Regulamento Geral de Proteção de Dados europeu (GDPR) consolidou um conjunto de obrigações que serve de referência para a interpretação e aplicação da legislação brasileira \cite{gdpr2016}.
+
+Diante desse contexto, o presente projeto propõe-se a responder ao seguinte problema norteador: \textit{Como estruturar e documentar políticas, regras e diretrizes para o uso, anonimização, sanitização, retenção, processamento e compartilhamento de dados de logs de infraestrutura de TI, de modo a apoiar a tomada de decisão em segurança da informação, garantir conformidade com a legislação brasileira de proteção de dados e normas internacionais, e subsidiar políticas de segurança e planos de contingência para resposta a incidentes?}
+
+Para responder a essa questão, o projeto desenvolve uma proposta estruturada de governança e proteção de dados aplicada a logs de infraestrutura, com apoio pontual de código para demonstração das técnicas de anonimização e sanitização propostas. O objeto de estudo concreto são os logs gerados por roteadores MikroTik RouterOS, amplamente utilizados por provedores de acesso à internet (ISPs) e redes corporativas brasileiras, cuja densidade de dados pessoais os torna um caso particularmente relevante para a análise.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Justificativa}
+\label{sec:justificativa}
+
+A ausência de políticas formais de governança para logs de TI é um problema recorrente em organizações de todos os portes. Administradores de rede frequentemente armazenam logs brutos por períodos indefinidos, sem critérios de acesso, sem procedimentos de descarte e sem qualquer processo de anonimização -- expondo dados de usuários, clientes e colaboradores a riscos desnecessários.
+
+Do ponto de vista legal, a LGPD não contempla exceção para dados presentes em logs técnicos: se a informação permite identificar uma pessoa natural, ela é dado pessoal e seu tratamento deve observar os princípios e obrigações da lei. Do ponto de vista ético, a acumulação irrestrita de logs representa uma forma de vigilância implícita sobre os usuários da rede, sem que estes tenham conhecimento ou consentimento. Do ponto de vista institucional, uma violação de dados envolvendo logs pode resultar em sanções administrativas, danos reputacionais e responsabilização civil e penal dos gestores.
+
+Este trabalho justifica-se, portanto, pela necessidade concreta de estruturar um conjunto de diretrizes que auxilie profissionais de TI e gestores a tratar logs de forma juridicamente adequada, tecnicamente eficiente e eticamente responsável.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Objetivos}
+\label{sec:objetivos}
+
+\subsection{Objetivo Geral}
+\label{subsec:objetivo-geral}
+
+Desenvolver uma proposta estruturada de governança e proteção de dados aplicada a logs de infraestrutura de TI, contemplando políticas, regras e diretrizes que assegurem a segurança da informação, a proteção de dados pessoais e a conformidade com a legislação e normativas vigentes, apoiando processos de tomada de decisão e resposta a incidentes.
+
+\subsection{Objetivos Específicos}
+\label{subsec:objetivos-especificos}
+
+\begin{alineas}
+    \item Analisar a natureza dos dados presentes em logs de infraestrutura de TI, identificando dados pessoais e dados pessoais sensíveis;
+    \item Relacionar o tratamento desses dados aos fundamentos e princípios da LGPD, do GDPR e das normativas da ANPD;
+    \item Propor políticas de segurança da informação aplicadas ao uso de logs, incluindo regras de acesso, retenção e descarte;
+    \item Desenvolver diretrizes de anonimização, pseudonimização e sanitização de dados, com apoio pontual de código demonstrativo;
+    \item Analisar a conformidade das propostas com a LGPD, o GDPR e a Resolução CD/ANPD n°~19/2024;
+    \item Propor um plano de contingência e resposta a incidentes alinhado às boas práticas de segurança da informação;
+    \item Refletir criticamente sobre os impactos sociais, éticos, legais e institucionais do uso de dados de logs.
+\end{alineas}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Delimitação do Escopo}
+\label{sec:escopo}
+
+O projeto concentra-se no desenvolvimento conceitual, normativo e documental de políticas e diretrizes de governança para logs de TI. Não constitui objetivo do trabalho a implementação completa de sistemas de armazenamento, processamento ou visualização de dados. O código apresentado no \autoref{cap:anonimizacao} tem caráter exclusivamente demonstrativo, destinado a ilustrar as técnicas de anonimização e sanitização propostas, sempre contextualizadas sob a ótica legal e ética.
+
+O objeto de estudo concreto são os logs de roteadores MikroTik RouterOS, escolhidos por sua ampla adoção no contexto brasileiro e pela riqueza de dados pessoais presentes em seus registros. As diretrizes propostas, contudo, têm aplicabilidade a qualquer equipamento ou sistema que produza logs de infraestrutura de TI.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Estrutura do Trabalho}
+\label{sec:estrutura}
+
+Este trabalho está organizado em nove capítulos. Além desta Introdução, o \autoref{cap:natureza} analisa a natureza dos dados presentes em logs de infraestrutura de TI. O \autoref{cap:legal} apresenta a fundamentação legal e normativa aplicável. O \autoref{cap:politicas} propõe as políticas de segurança da informação para logs. O \autoref{cap:anonimizacao} desenvolve as diretrizes de anonimização, pseudonimização e sanitização. O \autoref{cap:contingencia} apresenta o plano de contingência e resposta a incidentes. O \autoref{cap:conformidade} analisa a conformidade das propostas com a legislação vigente. O \autoref{cap:etica} traz a reflexão ética, social e institucional. Por fim, o \autoref{cap:conclusao} apresenta as considerações finais e os trabalhos futuros.

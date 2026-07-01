@@ -1,0 +1,146 @@
+% ==============================================================================
+% APÊNDICE A — CÓDIGO DEMONSTRATIVO DE ANONIMIZAÇÃO
+% ==============================================================================
+
+\chapter{Código Demonstrativo de Anonimização de Logs}
+\label{apend:codigo}
+
+Este apêndice reúne o código Python demonstrativo das técnicas de anonimização descritas no \autoref{cap:anonimizacao}, implementadas sobre logs MikroTik RouterOS com o framework Microsoft Presidio.
+
+\begin{lstlisting}[language=Python,
+    caption={Pipeline de anonimizacao de logs MikroTik -- core\_anonymizer.py},
+    label={lst:core-completo}]
+"""
+core_anonymizer.py
+Demonstracao de anonimizacao LGPD para logs MikroTik.
+
+Principios LGPD aplicados (Lei 13.709/2018):
+  Art. 6, III  -- Minimizacao: remove usernames
+  Art. 6, VII  -- Seguranca: hash SHA-256 nos IPs
+  Art. 6, VIII -- Prevencao: anonimizacao local
+  Art. 6, IX   -- Nao discriminacao: mascara MACs
+  Art. 46      -- Medidas tecnicas: pseudonimizacao
+
+Autores: Cristian Siqueira, Daniel Hennig,
+         Marco Hendge, William Fagundes, Pedro Frosi
+"""
+
+import re, hashlib, secrets, time
+from dataclasses import dataclass, field
+from typing import Literal
+
+AnonymizationMode = Literal["hash", "mask", "redact", "replace"]
+
+# --- Configuracao e resultado ---
+
+@dataclass
+class AnonymizerConfig:
+    ip_mode: AnonymizationMode = "hash"
+    mac_mode: AnonymizationMode = "mask"
+    redact_usernames: bool = True
+    hash_type: str = "sha256"
+    # Salt deve ser armazenado separadamente dos logs
+    salt: str = secrets.token_hex(32)
+
+@dataclass
+class ProcessingResult:
+    processed_lines: int = 0
+    ips_found: int = 0
+    macs_found: int = 0
+    usernames_found: int = 0
+    elapsed_seconds: float = 0.0
+    output_bytes: bytes = b""
+
+# --- Padroes de deteccao ---
+
+_IP_RE = re.compile(
+    r"\b(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}"
+    r"(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\b"
+)
+_MAC_RE = re.compile(
+    r"\b([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}\b"
+)
+_USERNAME_PATTERNS = [
+    (re.compile(r"\buser\s+(\w+)\s+logged\b",
+                re.IGNORECASE), "user <USUARIO> logged"),
+    (re.compile(r"\bchanged\s+by\s+(\w+)\b",
+                re.IGNORECASE), "changed by <USUARIO>"),
+    (re.compile(r"\bfailed\s+login\s+attempt\s+for\s+(\w+)\b",
+                re.IGNORECASE),
+                "failed login attempt for <USUARIO>"),
+]
+
+# --- Operadores de anonimizacao ---
+
+def _op_ip(mode: str, salt: str, hash_type: str):
+    if mode == "hash":
+        def _hash(m):
+            dado = (salt + m.group()).encode()
+            return hashlib.new(hash_type, dado).hexdigest()
+        return _hash
+    if mode == "mask":
+        def _mask(m):
+            p = m.group().split(".")
+            return f"{p[0]}.***.***.*{p[-1][-1]}"
+        return _mask
+    if mode == "redact":
+        return lambda m: "<IP_REMOVIDO>"
+    return lambda m: "<IP_ANONIMIZADO>"
+
+def _op_mac(mode: str, salt: str):
+    if mode == "hash":
+        def _hash(m):
+            dado = (salt + m.group()).encode()
+            return hashlib.sha256(dado).hexdigest()[:17]
+        return _hash
+    if mode == "mask":
+        def _mask(m):
+            tail = m.group()[9:]
+            return f"**:**:**:{tail}"
+        return _mask
+    if mode == "redact":
+        return lambda m: "<MAC_REMOVIDO>"
+    return lambda m: "<MAC_ANONIMIZADO>"
+
+# --- Motor principal ---
+
+class MikroTikAnonymizer:
+
+    def process(self, text: str,
+                config: AnonymizerConfig = None) -> ProcessingResult:
+        if config is None:
+            config = AnonymizerConfig()
+
+        start  = time.monotonic()
+        result = ProcessingResult()
+        ip_op  = _op_ip(config.ip_mode,
+                         config.salt, config.hash_type)
+        mac_op = _op_mac(config.mac_mode, config.salt)
+        out    = []
+
+        for line in text.splitlines():
+            # 1. Usernames (Art. 6, III - Minimizacao)
+            if config.redact_usernames:
+                for pat, repl in _USERNAME_PATTERNS:
+                    line, n = pat.subn(repl, line)
+                    result.usernames_found += n
+
+            # 2. IPs (Art. 6, VII/VIII - Seguranca/Prevencao)
+            hits = _IP_RE.findall(line)
+            if hits:
+                result.ips_found += len(hits)
+                line = _IP_RE.sub(ip_op, line)
+
+            # 3. MACs (Art. 6, IX - Nao discriminacao)
+            hits = _MAC_RE.findall(line)
+            if hits:
+                result.macs_found += len(hits)
+                line = _MAC_RE.sub(mac_op, line)
+
+            out.append(line)
+            result.processed_lines += 1
+
+        result.elapsed_seconds = time.monotonic() - start
+        result.output_bytes = "\n".join(out).encode("utf-8")
+        return result
+\end{lstlisting}

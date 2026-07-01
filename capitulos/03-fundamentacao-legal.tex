@@ -1,0 +1,113 @@
+% ==============================================================================
+% CAPÍTULO 3 — FUNDAMENTAÇÃO LEGAL E NORMATIVA
+% ==============================================================================
+
+\chapter{Fundamentação Legal e Normativa}
+\label{cap:legal}
+
+Este capítulo apresenta o arcabouço legal e normativo que rege o tratamento de dados pessoais em logs de infraestrutura de TI, abrangendo a LGPD, o GDPR e as normativas da ANPD, com ênfase nos dispositivos diretamente aplicáveis ao contexto do projeto.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Lei Geral de Proteção de Dados Pessoais}
+\label{sec:lgpd}
+
+A LGPD (Lei n°~13.709/2018) é o marco regulatório brasileiro de proteção da privacidade e dos dados pessoais \cite{brasil2018lgpd}. Ela se aplica a qualquer operação de tratamento realizada por pessoa natural ou jurídica, pública ou privada, que envolva dados coletados no território nacional ou de pessoas localizadas no Brasil (art.\ 3°). Não há exceção expressa para dados presentes em logs técnicos: se a informação permite identificar uma pessoa natural, ela é dado pessoal e seu tratamento deve observar a lei.
+
+\subsection{Princípios Fundamentais Aplicáveis a Logs}
+\label{subsec:principios}
+
+O art.\ 6° da LGPD estabelece os princípios que devem nortear todo tratamento de dados pessoais. O \autoref{qdr:principios-logs} relaciona cada princípio às suas implicações específicas para o tratamento de logs de infraestrutura.
+
+\begin{quadro}[htb]
+    \caption{\label{qdr:principios-logs}Princípios da LGPD e implicações para logs de infraestrutura}
+    \begin{tabular}{|p{2.2cm}|p{2.8cm}|p{8.8cm}|}
+        \hline
+        \textbf{Art.\ 6°} & \textbf{Princípio} & \textbf{Implicação para logs de TI} \\
+        \hline
+        Inciso I   & Finalidade     & O log deve ser coletado para finalidade legítima, específica e informada; não pode ser reutilizado para fins incompatíveis \\
+        \hline
+        Inciso II  & Adequação      & Os campos coletados devem ser compatíveis com a finalidade declarada; campos desnecessários não devem ser registrados \\
+        \hline
+        Inciso III & Minimização    & Coletar apenas os dados estritamente necessários; evitar campos que identifiquem diretamente o titular quando isso não for indispensável \\
+        \hline
+        Inciso V   & Qualidade      & Manter logs íntegros e precisos pelo período necessário; evitar duplicações desnecessárias \\
+        \hline
+        Inciso VI  & Transparência  & Informar os titulares sobre a coleta de dados de rede quando viável \\
+        \hline
+        Inciso VII & Segurança      & Adotar medidas técnicas e administrativas para proteger os logs de acessos não autorizados \\
+        \hline
+        Inciso VIII& Prevenção      & Aplicar controles preventivos antes do armazenamento e compartilhamento \\
+        \hline
+        Inciso IX  & Não discriminação & Impedir que logs sejam usados para perfilamento discriminatório \\
+        \hline
+        Inciso X   & Responsabilização & Demonstrar a adoção de medidas eficazes de conformidade \\
+        \hline
+    \end{tabular}
+    \legend{Fonte: Própria dos autores (2025), com base em \citeonline{brasil2018lgpd}.}
+\end{quadro}
+
+\subsection{Bases Legais para Tratamento de Logs}
+\label{subsec:bases-legais}
+
+O tratamento de dados pessoais presentes em logs deve estar fundamentado em uma das bases legais do art.\ 7° da LGPD. Para o contexto de logs de infraestrutura, as bases mais aplicáveis são:
+
+\begin{alineas}
+    \item \textbf{Legítimo interesse} (art.\ 7°, IX): a organização pode tratar dados de logs para fins de segurança da informação, detecção de intrusões e auditoria, desde que os interesses legítimos do controlador prevaleçam sobre os direitos e liberdades dos titulares e que seja realizado o teste de ponderação (balancing test);
+    \item \textbf{Cumprimento de obrigação legal} (art.\ 7°, II): determinadas legislações setoriais, como o Marco Civil da Internet (Lei n°~12.965/2014), obrigam provedores de conexão a manter logs de acesso por período mínimo de um ano (art.\ 13), criando base legal específica para esse tratamento;
+    \item \textbf{Exercício regular de direitos} (art.\ 7°, VI): logs podem ser mantidos para fins de defesa em processos judiciais, administrativos ou arbitrais.
+\end{alineas}
+
+\subsection{Anonimização e seus Efeitos Legais}
+\label{subsec:anonimizacao-lgpd}
+
+O art.\ 12 da LGPD estabelece que dados anonimizados não são considerados dados pessoais, salvo quando o processo puder ser revertido com meios técnicos razoáveis. Essa disposição cria um incentivo direto para que organizações adotem técnicas de anonimização em logs que não precisam preservar a identidade do titular para sua finalidade primária. O art.\ 13 permite o uso de dados anonimizados para estudos e pesquisas sem restrições adicionais.
+
+\subsection{Obrigações do Controlador quanto à Segurança}
+\label{subsec:obrigacoes-seguranca}
+
+O art.\ 46 impõe ao controlador a adoção de medidas de segurança, técnicas e administrativas aptas a proteger os dados pessoais de acessos não autorizados e de situações acidentais ou ilícitas de destruição, perda, alteração, comunicação ou difusão. O art.\ 48 obriga a notificação à ANPD e aos titulares em caso de incidente de segurança que possa acarretar risco ou dano relevante.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Regulamento Geral de Proteção de Dados (GDPR)}
+\label{sec:gdpr}
+
+O GDPR (Regulamento UE 2016/679) é o principal instrumento regulatório de proteção de dados da União Europeia e serviu de inspiração para a LGPD \cite{gdpr2016}. Sua análise é relevante para este projeto por duas razões: primeiro, porque muitas organizações brasileiras mantêm relações comerciais com parceiros europeus, sujeitando-se indiretamente ao GDPR; segundo, porque sua jurisprudência e orientações consolidadas pelos reguladores europeus (como o Comitê Europeu para a Proteção de Dados -- EDPB) oferecem subsídios interpretativos valiosos para a aplicação da LGPD.
+
+\subsection{Conceitos do GDPR Aplicáveis a Logs}
+\label{subsec:gdpr-logs}
+
+O GDPR introduz conceitos que complementam a análise da LGPD:
+
+\begin{alineas}
+    \item \textbf{Privacy by Design e Privacy by Default} (art.\ 25): a proteção de dados deve ser incorporada ao design dos sistemas desde o início, e as configurações padrão devem ser as mais protetoras possível. Aplicado a logs, isso significa que equipamentos devem ser configurados para coletar o mínimo necessário por padrão, e não o máximo possível;
+    \item \textbf{Relatório de Impacto à Proteção de Dados (DPIA)} (art.\ 35): quando o tratamento de dados puder resultar em alto risco para os direitos dos titulares -- como no caso de monitoramento sistemático de atividades de rede --, é obrigatória a realização de avaliação de impacto prévia. A LGPD prevê instrumento equivalente no art.\ 38 (Relatório de Impacto à Proteção de Dados -- RIPD);
+    \item \textbf{Limitação do armazenamento}: o art.\ 5°, 1, e, do GDPR determina que dados pessoais sejam conservados apenas pelo período necessário para as finalidades para as quais foram coletados -- princípio diretamente aplicável à definição de políticas de retenção de logs.
+\end{alineas}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Normativas da ANPD}
+\label{sec:anpd}
+
+A ANPD é a autoridade brasileira competente para fiscalizar o cumprimento da LGPD, editar normas e diretrizes e aplicar sanções (art.\ 55-A da LGPD). Suas resoluções e guias orientativos integram o arcabouço normativo aplicável ao tratamento de dados.
+
+\subsection{Resolução CD/ANPD n° 19/2024}
+\label{subsec:resolucao-19}
+
+A Resolução CD/ANPD n°~19/2024 estabelece normas complementares sobre medidas de segurança e gestão de incidentes de segurança com dados pessoais \cite{anpd2024resolucao}. Entre suas disposições relevantes para o presente projeto destacam-se:
+
+\begin{alineas}
+    \item A obrigação de manter registros de atividades de tratamento (art.\ 37 da LGPD), que no contexto de logs implica documentar quais dados são coletados, por qual finalidade, por quanto tempo e quem tem acesso;
+    \item A exigência de procedimentos formais para resposta a incidentes, incluindo prazos para notificação à ANPD (dois dias úteis a partir do conhecimento do incidente, nos termos da Resolução CD/ANPD n°~2/2022) e aos titulares afetados;
+    \item A recomendação de adoção de medidas técnicas proporcionais ao risco, incluindo criptografia, controle de acesso baseado em funções (RBAC) e pseudonimização.
+\end{alineas}
+
+\subsection{Guia de Anonimização e Pseudonimização da ANPD}
+\label{subsec:guia-anpd}
+
+O Guia de Boas Práticas publicado pela ANPD sobre anonimização e pseudonimização \cite{anpd2022anonimizacao} reconhece cinco técnicas principais de desidentificação: supressão, generalização, perturbação, permutação e pseudonimização. O guia ressalta que nenhuma técnica isolada garante anonimização perfeita e recomenda a combinação de múltiplas abordagens, calibradas ao risco residual de reidentificação avaliado para cada caso concreto.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Marco Civil da Internet}
+\label{sec:marco-civil}
+
+A Lei n°~12.965/2014 (Marco Civil da Internet) estabelece obrigações específicas para provedores de conexão e de aplicações quanto à guarda de logs \cite{brasil2014mci}. O art.\ 13 determina que provedores de conexão mantenham registros de conexão por um ano, em ambiente controlado e de segurança. O art.\ 15 impõe aos provedores de aplicações de internet a guarda de registros de acesso por seis meses. Essas obrigações criam bases legais específicas para a retenção de logs, mas não afastam a necessidade de conformidade com a LGPD quanto às demais obrigações de segurança e proteção de dados.
